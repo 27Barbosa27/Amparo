@@ -21,11 +21,13 @@
   "dependencies": {
     "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "luxon": "^3.7.2",
     "pg": "^8.16.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
+    "@types/luxon": "^3.7.6",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.0",
     "@types/supertest": "^6.0.0",
