@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ErroPerfil } from '../perfis/acesso.js';
 import { timezoneSchema } from '../perfis/validacao.js';
 import type { Db } from '../db.js';
+import { dispararSemFalhar, type Eventos } from '../eventos.js';
 import * as s from './servico.js';
 
 const uuid = z.uuid();
@@ -74,8 +75,18 @@ const intervaloTomasSchema = z.object({ de: data, ate: data }).refine((q) => q.a
  * Rotas de medicação de um perfil. Montadas SOB `/profiles/:profileId`, depois da verificação
  * de acesso, por isso `req.perfil` já está validado. Cada consulta filtra também por perfil.
  */
-export function rotasMedicacao(db: Db, mestra: Buffer): Router {
+export function rotasMedicacao(db: Db, mestra: Buffer, eventos: Eventos): Router {
   const router = Router();
+
+  // Uma alteração bem-sucedida do cuidador avisa os telemóveis ligados ao perfil (push de sincronização).
+  router.use((req, res, next) => {
+    if (req.method !== 'GET') {
+      res.on('finish', () => {
+        if (res.statusCode < 300 && req.perfil) void dispararSemFalhar(() => eventos.sincronizar(req.perfil!.id));
+      });
+    }
+    next();
+  });
 
   router.post('/medicamentos', async (req, res) => {
     const d = medicamentoSchema.parse(req.body);

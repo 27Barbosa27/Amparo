@@ -5,6 +5,7 @@ import { exigirAutenticacao } from '../auth/middleware.js';
 import { VERSAO_CONSENTIMENTO_ATUAL } from '../auth/rotas.js';
 import type { Config } from '../config.js';
 import type { Db } from '../db.js';
+import type { Eventos } from '../eventos.js';
 import { rotasDispositivosDoPerfil } from '../dispositivos/rotas.js';
 import { rotasMedicacao } from '../medicacao/rotas.js';
 import { timezoneSchema } from './validacao.js';
@@ -35,7 +36,7 @@ const alteracaoSchema = z
   .refine((o) => Object.keys(o).length > 0, 'nada para alterar');
 
 /** `/profiles`: gestão dos perfis a que o utilizador tem acesso. */
-export function rotasPerfis(db: Db, config: Config): Router {
+export function rotasPerfis(db: Db, config: Config, eventos: Eventos): Router {
   const chaveMestra = lerChave(config.PROFILE_MASTER_KEY);
   const router = Router();
   router.use(exigirAutenticacao(config.JWT_SECRET));
@@ -54,7 +55,7 @@ export function rotasPerfis(db: Db, config: Config): Router {
   const porPerfil = Router();
   router.use('/:profileId', acessoPorParametro(db), porPerfil);
 
-  porPerfil.use(rotasMedicacao(db, chaveMestra));
+  porPerfil.use(rotasMedicacao(db, chaveMestra, eventos));
   porPerfil.use(rotasDispositivosDoPerfil(db, config));
 
   porPerfil.get('/', async (req, res) => {

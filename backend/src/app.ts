@@ -13,6 +13,7 @@ import { pingDb, type Db } from './db.js';
 import { semEventos, type Eventos } from './eventos.js';
 import { ErroPerfil } from './perfis/acesso.js';
 import { rotaPerfilAtivo, rotasPerfis } from './perfis/rotas.js';
+import { rotasPush } from './push/rotas.js';
 import { rotasTomas } from './tomas/rotas.js';
 
 export interface OpcoesApp {
@@ -25,6 +26,7 @@ export interface OpcoesApp {
 export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
   const app = express();
   app.disable('x-powered-by');
+  if (config.TRUST_PROXY > 0) app.set('trust proxy', config.TRUST_PROXY);
   app.use(helmet());
   app.use(express.json({ limit: '100kb' }));
 
@@ -40,7 +42,8 @@ export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
   });
 
   app.use('/auth', rotasAuth(db, config, opcoes.auth));
-  app.use('/profiles', rotasPerfis(db, config));
+  app.use('/profiles', rotasPerfis(db, config, opcoes.eventos ?? semEventos));
+  app.use('/push-tokens', rotasPush(db, config));
   app.use('/perfil-ativo', rotaPerfilAtivo(db, config));
   app.use(rotasPublicasDispositivo(db, config, opcoes.dispositivos));
   app.use('/tomas', rotasTomas(db, config, opcoes.eventos ?? semEventos));

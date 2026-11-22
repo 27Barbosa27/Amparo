@@ -3,6 +3,10 @@ import { z } from 'zod';
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  /** Endereço onde escuta. Fora de um contentor fica em 127.0.0.1; dentro do contentor, 0.0.0.0 (a porta só é publicada em 127.0.0.1). */
+  HOST: z.string().min(1).default('127.0.0.1'),
+  /** Quantos proxies de confiança há à frente (o Caddy = 1), para o IP verdadeiro no rate limiting. 0 = nenhum. */
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
   DATABASE_URL: z.string().min(1),
   /** Segredo para assinar os tokens de acesso (mínimo 32 caracteres). */
   JWT_SECRET: z.string().min(32),
@@ -12,6 +16,8 @@ const schema = z.object({
   EMAIL_ENC_KEY: z.string().length(43),
   /** Chave-mestra AES-256 (32 bytes em base64url) que protege a chave de cada perfil. */
   PROFILE_MASTER_KEY: z.string().length(43),
+  /** Caminho do ficheiro JSON da conta de serviço do Firebase (só Cloud Messaging). Sem isto, o push fica desligado. */
+  FCM_SERVICE_ACCOUNT_FILE: z.string().min(1).optional(),
   /** Entrar com a Apple: o identificador da aplicação (`aud` do ID token). Sem isto o endpoint responde 501. */
   APPLE_CLIENT_ID: z.string().min(1).optional(),
   /** Entrar com a Google: os identificadores de cliente aceites (web, Android, iOS), separados por vírgulas. */

@@ -41,6 +41,10 @@ export function rotasTomas(db: Db, config: Config, eventos: Eventos): Router {
   const autorDe = (req: { userId?: string; dispositivo?: { id: string } }): Autor =>
     req.userId ? { userId: req.userId } : { dispositivoId: req.dispositivo!.id };
 
+  /** Só um registo do cuidador avisa o telemóvel da pessoa; o da própria pessoa já está nele. */
+  const sincronizarSeCuidador = (req: { userId?: string; perfil?: { id: string } }) =>
+    req.userId && req.perfil ? dispararSemFalhar(() => eventos.sincronizar(req.perfil!.id)) : Promise.resolve();
+
   router.get('/', async (req, res) => {
     const q = listaSchema.parse(req.query);
     const r = await listarTomasVista(db, mestra, req.perfil!.id, { desde: q.since, de: q.de, ate: q.ate });
@@ -65,6 +69,7 @@ export function rotasTomas(db: Db, config: Config, eventos: Eventos): Router {
     const r = await marcarTomada(db, { tomaId, profileId: req.perfil!.id, autor, ip: req.ip, ...b });
     if (!r.repetido) {
       await dispararSemFalhar(() => eventos.tomaRegistada(req.perfil!.id, tomaId, 'userId' in autor ? autor.userId : null));
+      await sincronizarSeCuidador(req);
     }
     res.json({ estado: r.estado, repetido: r.repetido });
   });
@@ -72,11 +77,13 @@ export function rotasTomas(db: Db, config: Config, eventos: Eventos): Router {
   router.post('/:id/saltar', async (req, res) => {
     const b = corpoRegisto(req);
     const r = await saltarToma(db, { tomaId: idDa(req.params.id), profileId: req.perfil!.id, autor: autorDe(req), ip: req.ip, ...b });
+    if (!r.repetido) await sincronizarSeCuidador(req);
     res.json({ estado: r.estado, repetido: r.repetido });
   });
 
   router.post('/:id/desfazer', async (req, res) => {
     const estado = await desfazerRegisto(db, { tomaId: idDa(req.params.id), profileId: req.perfil!.id, autor: autorDe(req), ip: req.ip });
+    await sincronizarSeCuidador(req);
     res.json({ estado });
   });
 
