@@ -1,8 +1,16 @@
 import express, { type ErrorRequestHandler } from 'express';
 import helmet from 'helmet';
+import { ZodError } from 'zod';
+import { ErroAuth } from './auth/erros.js';
+import { rotasAuth, type OpcoesAuth } from './auth/rotas.js';
+import type { Config } from './config.js';
 import { pingDb, type Db } from './db.js';
 
-export function createApp(db: Db) {
+export interface OpcoesApp {
+  auth?: OpcoesAuth;
+}
+
+export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
@@ -19,12 +27,27 @@ export function createApp(db: Db) {
     res.status(ok ? 200 : 503).json({ estado: ok ? 'ok' : 'sem_base_de_dados' });
   });
 
+  app.use('/auth', rotasAuth(db, config, opcoes.auth));
+
   app.use((_req, res) => {
     res.status(404).json({ erro: 'nao_encontrado' });
   });
 
-  // Nunca devolve detalhes internos ao cliente (podem conter dados de saúde).
   const erros: ErrorRequestHandler = (err, _req, res, _next) => {
+    if (err instanceof ErroAuth) {
+      res.status(err.estado).json({ erro: err.codigo });
+      return;
+    }
+    if (err instanceof ZodError) {
+      // Só os nomes dos campos: nunca devolvemos os valores (podem ser palavras-passe).
+      res.status(400).json({ erro: 'pedido_invalido', campos: [...new Set(err.issues.map((i) => i.path.join('.')))] });
+      return;
+    }
+    if (err instanceof SyntaxError && 'body' in err) {
+      res.status(400).json({ erro: 'pedido_invalido', campos: [] });
+      return;
+    }
+    // Nunca devolve detalhes internos ao cliente (podem conter dados de saúde).
     console.error('Erro não tratado:', err instanceof Error ? err.message : 'desconhecido');
     res.status(500).json({ erro: 'erro_interno' });
   };

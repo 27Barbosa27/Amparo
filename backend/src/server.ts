@@ -4,7 +4,7 @@ import { createPool } from './db.js';
 
 const config = loadConfig();
 const db = createPool(config.DATABASE_URL);
-const app = createApp(db);
+const app = createApp(db, config);
 
 const server = app.listen(config.PORT, '127.0.0.1', () => {
   console.log(`Amparo API a ouvir em http://127.0.0.1:${config.PORT}`);

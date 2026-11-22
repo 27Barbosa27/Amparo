@@ -4,6 +4,10 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().min(1),
+  /** Segredo para assinar os tokens de acesso (mínimo 32 caracteres). */
+  JWT_SECRET: z.string().min(32),
+  /** Segredo (pepper) do hash dos emails (mínimo 32 caracteres). */
+  EMAIL_PEPPER: z.string().min(32),
 });
 
 export type Config = z.infer<typeof schema>;

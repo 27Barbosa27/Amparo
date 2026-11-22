@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
+import { loadConfig } from '../src/config.js';
 import { createPool } from '../src/db.js';
 
 describe('API: estado', () => {
-  const db = createPool(process.env.DATABASE_URL ?? 'postgres://invalido');
-  const app = createApp(db);
+  const config = loadConfig();
+  const db = createPool(config.DATABASE_URL);
+  const app = createApp(db, config);
 
   it('GET /health responde ok sem tocar na base de dados', async () => {
     const res = await request(app).get('/health');
