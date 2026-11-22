@@ -1,0 +1,86 @@
+# Produção numa VPS Linux na UE: Podman rootless + Caddy com TLS automático.
+#   cp deploy/prod.env.example deploy/.env.prod   (e preencher; nunca vai para o Git)
+#   podman compose -f deploy/compose.prod.yaml --env-file deploy/.env.prod up -d --build
+# Ver docs/deploy.md.
+name: amparo
+
+services:
+  db:
+    image: docker.io/library/postgres:17-alpine
+    container_name: amparo-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Sem portas publicadas: só a API, na rede interna, chega à base de dados.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Corre as migrações e termina. A API só arranca depois de terminarem bem.
+  migrar:
+    build:
+      context: ../backend
+      dockerfile: Containerfile
+    image: amparo-api:latest
+    command: ["node", "node_modules/node-pg-migrate/bin/node-pg-migrate.js", "up", "-m", "migrations"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: amparo-api:latest
+    container_name: amparo-api
+    restart: always
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      TRUST_PROXY: "1" # o Caddy está à frente
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      FCM_SERVICE_ACCOUNT_FILE: /run/secrets/fcm-service-account.json
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrar:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: docker.io/library/caddy:2-alpine
+    container_name: amparo-caddy
+    restart: always
+    environment:
+      AMPARO_DOMAIN: ${AMPARO_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

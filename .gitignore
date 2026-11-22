@@ -31,3 +31,4 @@ dist/
 # Base de dados local
 *.sqlite
 pgdata/
+deploy/secrets/

@@ -32,3 +32,18 @@ describe('API: estado', () => {
     expect(res.body).toEqual({ estado: 'ok' });
   });
 });
+
+describe('API: base de dados inacessível', () => {
+  it('/health/db responde 503 depressa em vez de ficar pendurado', async () => {
+    const config = loadConfig();
+    // 10.255.255.1 não é encaminhável: a ligação nunca se completa.
+    const db = createPool('postgres://amparo:x@10.255.255.1:5432/amparo', { ligacaoMs: 400 });
+    const app = createApp(db, config);
+    const inicio = Date.now();
+    const res = await request(app).get('/health/db');
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ estado: 'sem_base_de_dados' });
+    expect(Date.now() - inicio).toBeLessThan(3000);
+    await db.end().catch(() => undefined);
+  });
+});

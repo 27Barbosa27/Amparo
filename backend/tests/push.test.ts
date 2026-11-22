@@ -358,6 +358,23 @@ describe('Trabalhos', () => {
     expect(falso.para(y.p)).toEqual([]);
   });
 
+  it('um perfil com a chave ilegível não impede os alertas dos outros', async () => {
+    const estragado = await comPrefs();
+    await umaToma(estragado.a, estragado.p, 60 * MIN, { unidadesIniciais: 1 });
+    await db.query('update profiles set chave_cifrada = $2 where id = $1', [estragado.p, Buffer.from('lixo')]);
+    const bom = await comPrefs();
+    await umaToma(bom.a, bom.p, 60 * MIN, { unidadesIniciais: 1 });
+    const silencio = console.error;
+    console.error = () => undefined;
+    try {
+      await alertarReceitasAAcabar(ctx(), new Date());
+    } finally {
+      console.error = silencio;
+    }
+    expect(falso.para(bom.p, 'receita_a_acabar')).toHaveLength(1);
+    expect(falso.para(estragado.p)).toEqual([]);
+  });
+
   it('a limpeza apaga o que expirou e nunca toca na auditoria', async () => {
     const { a, p } = await comPrefs();
     await db.query("insert into pairing_codes (profile_id, criado_por_user_id, codigo_hash, expira_em) values ($1, $2, $3, now() - interval '3 days')", [p, a.id, Buffer.from('x'.repeat(32))]);

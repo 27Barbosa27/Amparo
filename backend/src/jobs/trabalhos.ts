@@ -67,7 +67,15 @@ export async function alertarReceitasAAcabar(c: Contexto, agora: Date): Promise<
   const cache = new Map<string, Awaited<ReturnType<typeof listarReceitas>>>();
   const porPerfil = new Map<string, Set<string>>();
   for (const p of rows) {
-    if (!cache.has(p.profile_id)) cache.set(p.profile_id, await listarReceitas(c.db, c.chaveMestra, p.profile_id));
+    if (!cache.has(p.profile_id)) {
+      try {
+        cache.set(p.profile_id, await listarReceitas(c.db, c.chaveMestra, p.profile_id));
+      } catch (e) {
+        // Um perfil com problemas (apagado a meio, chave ilegível) nunca pode calar os alertas dos outros.
+        console.error('Receitas a acabar: perfil ignorado:', e instanceof Error ? e.message : 'desconhecido');
+        cache.set(p.profile_id, []);
+      }
+    }
     for (const r of cache.get(p.profile_id)!) {
       const terminada = r.fim !== null && r.fim <= agora;
       if (!r.ativa || terminada || r.stock?.diasRestantes == null || r.stock.diasRestantes > p.dias_antes) continue;

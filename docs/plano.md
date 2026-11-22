@@ -192,6 +192,8 @@ audit_logs(id bigserial, ts_utc, user_id, profile_id, acao, entidade,
 
 ## 7. Plano de Execução (por ordem)
 
+> **Estado do backend (22 nov 2026):** os pontos 2, 3, 4 (servidor), 5 (servidor), 6 (servidor) e 7 (ficheiros de deploy, backups e CI) estão feitos e testados (236 testes). Falta o que depende de contas externas ou da app: spike de alarmes (1), recuperação de palavra-passe por email, testes contra Firebase/Apple/Google verdadeiros, DPIA, política de privacidade e a VPS real. Ver `backend/README.md` e `docs/deploy.md`.
+
 0. **Design:** feito (25 ecrãs). Manter o artefacto como referência; tokens (cores, tipografia, espaçamentos) passam para o tema Flutter.
 1. **Spike técnico:** alarme exato com snooze em background, fiável em Android real **e iPhone**. Se falhar, o plano de alarmes muda antes de mais código.
 2. **Modelo de dados e geração de tomas**, com testes unitários (intervalo, hora fixa, mudança de hora, edição, janela rolante, atrasada derivada, desfazer ≤ 1 min).
