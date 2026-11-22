@@ -5,6 +5,7 @@ import { exigirAutenticacao } from '../auth/middleware.js';
 import { VERSAO_CONSENTIMENTO_ATUAL } from '../auth/rotas.js';
 import type { Config } from '../config.js';
 import type { Db } from '../db.js';
+import { rotasDispositivosDoPerfil } from '../dispositivos/rotas.js';
 import { rotasMedicacao } from '../medicacao/rotas.js';
 import { timezoneSchema } from './validacao.js';
 import { acessoPorCabecalho, acessoPorParametro, exigirPapel, ErroPerfil } from './acesso.js';
@@ -54,6 +55,7 @@ export function rotasPerfis(db: Db, config: Config): Router {
   router.use('/:profileId', acessoPorParametro(db), porPerfil);
 
   porPerfil.use(rotasMedicacao(db, chaveMestra));
+  porPerfil.use(rotasDispositivosDoPerfil(db, config));
 
   porPerfil.get('/', async (req, res) => {
     const perfil = await obterPerfil(db, req.userId!, req.perfil!.id);

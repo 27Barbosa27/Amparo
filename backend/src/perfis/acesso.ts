@@ -2,6 +2,8 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { Db } from '../db.js';
 
 export type PapelAcesso = 'owner' | 'caregiver';
+/** Quem faz o pedido: um cuidador com um dos papéis, ou o telemóvel de uma pessoa (token de dispositivo). */
+export type PapelPedido = PapelAcesso | 'dispositivo';
 
 /** Erro de acesso a um perfil. "não encontrado" cobre também "existe mas não é seu". */
 export class ErroPerfil extends Error {
@@ -17,7 +19,9 @@ export class ErroPerfil extends Error {
 declare module 'express-serve-static-core' {
   interface Request {
     /** Perfil a que o pedido tem acesso, preenchido por `acessoPorParametro` / `acessoPorCabecalho`. */
-    perfil?: { id: string; papel: PapelAcesso };
+    perfil?: { id: string; papel: PapelPedido };
+    /** Preenchido quando o pedido vem do telemóvel de uma pessoa (token de dispositivo). */
+    dispositivo?: { id: string; profileId: string };
   }
 }
 
@@ -28,7 +32,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * perfil sem passar por aqui. Se o utilizador não tiver acesso ativo (nunca teve, ou foi revogado),
  * a resposta é a mesma de um perfil inexistente: assim não se descobre que perfis existem.
  */
-async function resolverAcesso(db: Db, userId: string | undefined, profileId: string | undefined) {
+export async function resolverAcesso(db: Db, userId: string | undefined, profileId: string | undefined) {
   if (!userId) throw new ErroPerfil('perfil_nao_encontrado', 404);
   if (!profileId || !UUID.test(profileId)) throw new ErroPerfil('perfil_nao_encontrado', 404);
   const { rows } = await db.query<{ papel: PapelAcesso }>(
@@ -65,7 +69,7 @@ export function acessoPorCabecalho(db: Db): RequestHandler {
 }
 
 /** Depois do acesso: só estes papéis podem continuar (os outros sabem que o perfil existe, logo 403). */
-export function exigirPapel(...papeis: PapelAcesso[]): RequestHandler {
+export function exigirPapel(...papeis: PapelPedido[]): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.perfil || !papeis.includes(req.perfil.papel)) return next(new ErroPerfil('sem_permissao', 403));
     next();

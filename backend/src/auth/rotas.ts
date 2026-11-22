@@ -3,6 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import type { Config } from '../config.js';
 import type { Db } from '../db.js';
+import { atualizarConta, telefoneDoUtilizador } from './conta.js';
 import { lerChave } from './cifra.js';
 import { ErroAuth } from './erros.js';
 import { exigirAutenticacao } from './middleware.js';
@@ -22,6 +23,13 @@ const registoSchema = z.object({
   consentimentoVersao: z.string().min(1).max(20).default(VERSAO_CONSENTIMENTO_ATUAL),
 });
 const loginSchema = z.object({ email: emailSchema, senha: z.string().min(1).max(128) });
+const contaSchema = z
+  .object({
+    nome: z.string().trim().min(1).max(60),
+    telefone: z.string().trim().regex(/^\+?[0-9 ]{9,18}$/).nullable(),
+  })
+  .partial()
+  .refine((o) => Object.keys(o).length > 0, 'nada para alterar');
 const refreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
 
 export interface OpcoesAuth {
@@ -36,7 +44,7 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
   const limite = opcoes.limitarPorIp ?? { janelaMs: 60_000, maximo: 20 };
   if (limite) {
     router.use(
-      ['/registo', '/login', '/refresh'],
+      ['/registo', '/register', '/login', '/refresh'],
       rateLimit({
         windowMs: limite.janelaMs,
         limit: limite.maximo,
@@ -49,7 +57,7 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
     );
   }
 
-  router.post('/registo', async (req, res) => {
+  router.post(['/registo', '/register'], async (req, res) => {
     const d = registoSchema.parse(req.body);
     const { userId, sessao } = await registar(
       db,
@@ -81,7 +89,14 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
   router.get('/me', exigirAutenticacao(config.JWT_SECRET), async (req, res) => {
     const perfil = req.userId ? await perfilDoUtilizador(db, req.userId) : null;
     if (!perfil) throw new ErroAuth('nao_autenticado', 401);
-    res.json({ utilizador: { id: perfil.id, nome: perfil.nome, criadoEm: perfil.criadoEm } });
+    const telefone = await telefoneDoUtilizador(db, perfil.id, segredos.emailChave);
+    res.json({ utilizador: { id: perfil.id, nome: perfil.nome, criadoEm: perfil.criadoEm, telefone } });
+  });
+
+  router.patch('/me', exigirAutenticacao(config.JWT_SECRET), async (req, res) => {
+    const a = contaSchema.parse(req.body);
+    await atualizarConta(db, req.userId!, a, segredos.emailChave);
+    res.status(204).end();
   });
 
   return router;
