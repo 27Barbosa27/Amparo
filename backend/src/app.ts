@@ -1,4 +1,5 @@
 import express, { type ErrorRequestHandler } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
 import { ErroAuth } from './auth/erros.js';
@@ -21,6 +22,10 @@ export interface OpcoesApp {
   dispositivos?: OpcoesDispositivos;
   /** Ganchos de push e sincronização (por omissão não fazem nada). */
   eventos?: Eventos;
+  /** Onde escrever o registo dos pedidos. Por omissão, a consola (menos nos testes). `false` desliga. */
+  registar?: ((linha: Record<string, unknown>) => void) | false;
+  /** Limite global de pedidos por IP. Por omissão só em produção. */
+  limiteGlobal?: { janelaMs: number; maximo: number } | false;
 }
 
 export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
@@ -29,6 +34,25 @@ export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
   if (config.TRUST_PROXY > 0) app.set('trust proxy', config.TRUST_PROXY);
   app.use(helmet());
   app.use(express.json({ limit: '100kb' }));
+
+  // Registo dos pedidos: só o método, o padrão da rota (sem ids), o estado e a duração. Nunca corpo, query, cabeçalhos nem IP.
+  const registar = opcoes.registar === undefined ? (config.NODE_ENV === 'test' ? false : (l: Record<string, unknown>) => console.log(JSON.stringify(l))) : opcoes.registar;
+  if (registar) {
+    app.use((req, res, next) => {
+      const inicio = process.hrtime.bigint();
+      res.on('finish', () => {
+        const rota = req.originalUrl.split('?')[0]!.slice(0, 100); // sem a query
+        registar({
+          ts: new Date().toISOString(),
+          metodo: req.method,
+          rota: rota.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id'),
+          estado: res.statusCode,
+          ms: Number((process.hrtime.bigint() - inicio) / 1_000_000n),
+        });
+      });
+      next();
+    });
+  }
 
   // Estado do servidor (sem tocar na base de dados).
   app.get('/health', (_req, res) => {
@@ -40,6 +64,22 @@ export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
     const ok = await pingDb(db);
     res.status(ok ? 200 : 503).json({ estado: ok ? 'ok' : 'sem_base_de_dados' });
   });
+
+  // Rede de segurança contra abuso (os limites mais apertados estão nas rotas de entrada e de ligação).
+  const global = opcoes.limiteGlobal === undefined ? (config.NODE_ENV === 'production' ? { janelaMs: 60_000, maximo: 600 } : false) : opcoes.limiteGlobal;
+  if (global) {
+    app.use(
+      rateLimit({
+        windowMs: global.janelaMs,
+        limit: global.maximo,
+        standardHeaders: 'draft-7',
+        legacyHeaders: false,
+        handler: (_req, res) => {
+          res.status(429).json({ erro: 'demasiadas_tentativas' });
+        },
+      }),
+    );
+  }
 
   app.use('/auth', rotasAuth(db, config, opcoes.auth));
   app.use('/profiles', rotasPerfis(db, config, opcoes.eventos ?? semEventos));

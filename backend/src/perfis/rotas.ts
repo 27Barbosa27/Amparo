@@ -10,6 +10,7 @@ import { rotasDispositivosDoPerfil } from '../dispositivos/rotas.js';
 import { rotasMedicacao } from '../medicacao/rotas.js';
 import { timezoneSchema } from './validacao.js';
 import { acessoPorCabecalho, acessoPorParametro, exigirPapel, ErroPerfil } from './acesso.js';
+import { exportarPerfil } from './exportacao.js';
 import { alterarPerfil, apagarPerfil, criarPerfil, listarPerfis, obterPerfil } from './servico.js';
 
 const tamanhoTexto = z.enum(['normal', 'grande', 'muito_grande']);
@@ -62,6 +63,10 @@ export function rotasPerfis(db: Db, config: Config, eventos: Eventos): Router {
     const perfil = await obterPerfil(db, req.userId!, req.perfil!.id);
     if (!perfil) throw new ErroPerfil('perfil_nao_encontrado', 404);
     res.json({ perfil });
+  });
+
+  porPerfil.get('/exportacao', exigirPapel('owner'), async (req, res) => {
+    res.json(await exportarPerfil(db, chaveMestra, req.perfil!.id, req.userId!, req.ip));
   });
 
   porPerfil.patch('/', exigirPapel('owner'), async (req, res) => {

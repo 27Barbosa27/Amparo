@@ -3,7 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import type { Config } from '../config.js';
 import type { Db } from '../db.js';
-import { atualizarConta, telefoneDoUtilizador } from './conta.js';
+import { apagarConta, atualizarConta, exportarConta, telefoneDoUtilizador } from './conta.js';
 import { lerChave } from './cifra.js';
 import { ErroAuth } from './erros.js';
 import { criarVerificadorExterno, entrarComFornecedor, type Provedor, type VerificadorExterno } from './externo.js';
@@ -39,6 +39,7 @@ const externoSchema = z.object({
   aceitaTermos: z.boolean().optional(),
   consentimentoVersao: z.string().min(1).max(20).default(VERSAO_CONSENTIMENTO_ATUAL),
 });
+const apagarSchema = z.object({ senha: z.string().max(128).optional(), confirmar: z.boolean().optional() });
 const refreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
 
 export interface OpcoesAuth {
@@ -113,6 +114,17 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
     if (!perfil) throw new ErroAuth('nao_autenticado', 401);
     const telefone = await telefoneDoUtilizador(db, perfil.id, segredos.emailChave);
     res.json({ utilizador: { id: perfil.id, nome: perfil.nome, criadoEm: perfil.criadoEm, telefone } });
+  });
+
+  router.get('/me/exportacao', exigirAutenticacao(config.JWT_SECRET), async (req, res) => {
+    const dados = await exportarConta(db, req.userId!, segredos.emailChave, req.ip);
+    if (!dados) throw new ErroAuth('nao_autenticado', 401);
+    res.json(dados);
+  });
+
+  router.delete('/me', exigirAutenticacao(config.JWT_SECRET), async (req, res) => {
+    await apagarConta(db, req.userId!, apagarSchema.parse(req.body ?? {}), req.ip);
+    res.status(204).end();
   });
 
   router.patch('/me', exigirAutenticacao(config.JWT_SECRET), async (req, res) => {

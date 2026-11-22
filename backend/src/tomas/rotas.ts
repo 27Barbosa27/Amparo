@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { exigirPrincipal, perfilDoPedido } from '../auth/principal.js';
 import type { Config } from '../config.js';
+import { auditarLeituras } from '../auditoria.js';
 import type { Db } from '../db.js';
 import { dispararSemFalhar, type Eventos } from '../eventos.js';
 import { lerChave } from '../auth/cifra.js';
@@ -36,7 +37,7 @@ const registoSchema = z.object({
 export function rotasTomas(db: Db, config: Config, eventos: Eventos): Router {
   const mestra = lerChave(config.PROFILE_MASTER_KEY);
   const router = Router();
-  router.use(exigirPrincipal(db, config.JWT_SECRET), perfilDoPedido(db));
+  router.use(exigirPrincipal(db, config.JWT_SECRET), perfilDoPedido(db), auditarLeituras(db, 'toma'));
 
   const autorDe = (req: { userId?: string; dispositivo?: { id: string } }): Autor =>
     req.userId ? { userId: req.userId } : { dispositivoId: req.dispositivo!.id };

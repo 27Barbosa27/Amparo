@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ErroPerfil } from '../perfis/acesso.js';
 import { timezoneSchema } from '../perfis/validacao.js';
+import { auditarLeituras } from '../auditoria.js';
 import type { Db } from '../db.js';
 import { dispararSemFalhar, type Eventos } from '../eventos.js';
 import * as s from './servico.js';
@@ -87,6 +88,9 @@ export function rotasMedicacao(db: Db, mestra: Buffer, eventos: Eventos): Router
     }
     next();
   });
+  router.use('/medicamentos', auditarLeituras(db, 'medicamento'));
+  router.use('/receitas', auditarLeituras(db, 'receita'));
+  router.use('/tomas', auditarLeituras(db, 'toma'));
 
   router.post('/medicamentos', async (req, res) => {
     const d = medicamentoSchema.parse(req.body);
