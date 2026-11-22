@@ -5,6 +5,8 @@ import { ErroAuth } from './auth/erros.js';
 import { rotasAuth, type OpcoesAuth } from './auth/rotas.js';
 import type { Config } from './config.js';
 import { pingDb, type Db } from './db.js';
+import { ErroPerfil } from './perfis/acesso.js';
+import { rotaPerfilAtivo, rotasPerfis } from './perfis/rotas.js';
 
 export interface OpcoesApp {
   auth?: OpcoesAuth;
@@ -28,6 +30,8 @@ export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
   });
 
   app.use('/auth', rotasAuth(db, config, opcoes.auth));
+  app.use('/profiles', rotasPerfis(db, config));
+  app.use('/perfil-ativo', rotaPerfilAtivo(db, config));
 
   app.use((_req, res) => {
     res.status(404).json({ erro: 'nao_encontrado' });
@@ -35,6 +39,10 @@ export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
 
   const erros: ErrorRequestHandler = (err, _req, res, _next) => {
     if (err instanceof ErroAuth) {
+      res.status(err.estado).json({ erro: err.codigo });
+      return;
+    }
+    if (err instanceof ErroPerfil) {
       res.status(err.estado).json({ erro: err.codigo });
       return;
     }

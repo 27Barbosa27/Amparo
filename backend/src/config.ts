@@ -10,6 +10,8 @@ const schema = z.object({
   EMAIL_PEPPER: z.string().min(32),
   /** Chave AES-256 (32 bytes em base64url) para cifrar o email, usado na recuperação de palavra-passe. */
   EMAIL_ENC_KEY: z.string().length(43),
+  /** Chave-mestra AES-256 (32 bytes em base64url) que protege a chave de cada perfil. */
+  PROFILE_MASTER_KEY: z.string().length(43),
 });
 
 export type Config = z.infer<typeof schema>;
