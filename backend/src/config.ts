@@ -8,6 +8,8 @@ const schema = z.object({
   JWT_SECRET: z.string().min(32),
   /** Segredo (pepper) do hash dos emails (mínimo 32 caracteres). */
   EMAIL_PEPPER: z.string().min(32),
+  /** Chave AES-256 (32 bytes em base64url) para cifrar o email, usado na recuperação de palavra-passe. */
+  EMAIL_ENC_KEY: z.string().length(43),
 });
 
 export type Config = z.infer<typeof schema>;

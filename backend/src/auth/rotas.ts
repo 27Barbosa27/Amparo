@@ -3,6 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import type { Config } from '../config.js';
 import type { Db } from '../db.js';
+import { lerChave } from './cifra.js';
 import { ErroAuth } from './erros.js';
 import { exigirAutenticacao } from './middleware.js';
 import { entrar, perfilDoUtilizador, registar, renovar, sair } from './servico.js';
@@ -29,7 +30,7 @@ export interface OpcoesAuth {
 }
 
 export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Router {
-  const segredos = { jwtSecret: config.JWT_SECRET, emailPepper: config.EMAIL_PEPPER };
+  const segredos = { jwtSecret: config.JWT_SECRET, emailPepper: config.EMAIL_PEPPER, emailChave: lerChave(config.EMAIL_ENC_KEY) };
   const router = Router();
 
   const limite = opcoes.limitarPorIp ?? { janelaMs: 60_000, maximo: 20 };

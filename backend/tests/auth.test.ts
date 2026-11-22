@@ -3,6 +3,8 @@ import { SignJWT } from 'jose';
 import request from 'supertest';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
+import { decifrar, lerChave } from '../src/auth/cifra.js';
+import { emailParaEnvio } from '../src/auth/servico.js';
 import { loadConfig } from '../src/config.js';
 import { createPool } from '../src/db.js';
 
@@ -46,6 +48,17 @@ describe('Registo', () => {
     const esperado = createHmac('sha256', config.EMAIL_PEPPER).update(c.email).digest('hex');
     expect(Buffer.from(rows[0].email_hash).toString('hex')).toBe(esperado);
     expect(rows[0].consentimento_versao).toBeTruthy();
+  });
+
+  it('guarda o email cifrado (para a recuperação de palavra-passe) e só o servidor o consegue ler', async () => {
+    const c = await criarConta('Joao.Silva@Exemplo.pt');
+    const { rows } = await db.query('select email_cifrado from users where id = $1', [c.utilizador.id]);
+    const guardado = rows[0].email_cifrado as Buffer;
+    expect(guardado.toString('utf8').toLowerCase()).not.toContain('joao');
+    const chave = lerChave(config.EMAIL_ENC_KEY);
+    expect(decifrar(guardado, chave)).toBe('joao.silva@exemplo.pt'); // normalizado
+    const segredos = { jwtSecret: config.JWT_SECRET, emailPepper: config.EMAIL_PEPPER, emailChave: chave };
+    expect(await emailParaEnvio(db, c.utilizador.id, segredos)).toBe('joao.silva@exemplo.pt');
   });
 
   it('o refresh token só é guardado como hash', async () => {

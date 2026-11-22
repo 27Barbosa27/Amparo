@@ -106,6 +106,7 @@ Tudo em UTC. A hora local só existe na apresentação e na intenção da receit
   6. Cada ligação e revogação vai para o `audit_logs`.
 - **Regra da Apple:** se a app oferece login com Google no iPhone, tem de oferecer também "Entrar com a Apple" (e vice-versa os dois aparecem juntos em Entrar e Registar).
 - **Apple "esconder o meu email":** o email pode ser um *relay* e só chega na primeira autorização. Guardar o `sub` do fornecedor como identificador estável.
+- **Email e recuperação de palavra-passe:** o email guarda-se de duas formas. O `email_hash` (HMAC com segredo) serve para encontrar a conta e impedir duplicados. O `email_cifrado` (AES-256-GCM, chave só no ambiente do servidor) serve para enviar o link de recuperação. O email nunca se guarda em claro, nunca se regista em logs e nunca se devolve à app. A chave de cifra tem versão no formato guardado, para se poder rodar.
 - **Tokens:** access JWT 15 min + refresh com rotação e revogação em `flutter_secure_storage`. Rate limiting e bloqueio progressivo no login.
 - **Tentativas locais:** biometria falhada mostra tentativas restantes e passa ao PIN; o PIN tem limite de tentativas, depois exige login completo (e remove a sessão do aparelho).
 - **Perfil ativo:** header `X-Profile-Id`, validado por um middleware único contra `profile_access(user_id, profile_id, role, criado_em, revogado_em)`. Nenhuma rota acede a dados de perfil sem passar por ele.
@@ -130,7 +131,7 @@ Dados de saúde são **categoria especial (art. 9.º)**. Pseudonimização é co
 ## 5. Esboço do Modelo de Dados
 
 ```
-users(id uuid pk, email_hash null, password_hash null, telefone_cifrado null,
+users(id uuid pk, email_hash null, email_cifrado null, password_hash null, telefone_cifrado null,
       consentimento_versao, consentimento_em, criado_em)
 auth_providers(user_id fk, provider [apple|google], provider_sub, criado_em,
                pk(provider, provider_sub))

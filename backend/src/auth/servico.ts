@@ -1,5 +1,6 @@
 import type { Db } from '../db.js';
-import { hashEmail } from './email.js';
+import { cifrar, decifrar } from './cifra.js';
+import { hashEmail, normalizarEmail } from './email.js';
 import { ErroAuth } from './erros.js';
 import { hashSenha, verificarContraHashFalso, verificarSenha } from './senha.js';
 import {
@@ -13,6 +14,8 @@ import {
 export interface SegredosAuth {
   jwtSecret: string;
   emailPepper: string;
+  /** Chave AES-256 (32 bytes) para cifrar o email. */
+  emailChave: Buffer;
 }
 
 export interface Sessao {
@@ -69,11 +72,17 @@ export async function registar(
 ): Promise<{ userId: string; sessao: Sessao }> {
   const senhaHash = await hashSenha(dados.senha);
   const { rows } = await db.query<{ id: string }>(
-    `insert into users (email_hash, password_hash, nome_exibicao, consentimento_versao, consentimento_em)
-     values ($1, $2, $3, $4, now())
+    `insert into users (email_hash, email_cifrado, password_hash, nome_exibicao, consentimento_versao, consentimento_em)
+     values ($1, $2, $3, $4, $5, now())
      on conflict (email_hash) do nothing
      returning id`,
-    [hashEmail(dados.email, segredos.emailPepper), senhaHash, dados.nome.trim(), dados.consentimentoVersao],
+    [
+      hashEmail(dados.email, segredos.emailPepper),
+      cifrar(normalizarEmail(dados.email), segredos.emailChave),
+      senhaHash,
+      dados.nome.trim(),
+      dados.consentimentoVersao,
+    ],
   );
   const userId = rows[0]?.id;
   if (!userId) throw new ErroAuth('email_ja_existe', 409);
@@ -198,4 +207,14 @@ export async function perfilDoUtilizador(
   );
   const r = rows[0];
   return r ? { id: r.id, nome: r.nome_exibicao, criadoEm: r.criado_em } : null;
+}
+
+/**
+ * Devolve o email em claro de um utilizador, para lhe enviar a recuperação de palavra-passe.
+ * Só deve ser chamado por esse fluxo, e o resultado nunca deve ser registado nem devolvido à app.
+ */
+export async function emailParaEnvio(db: Db, userId: string, segredos: SegredosAuth): Promise<string | null> {
+  const { rows } = await db.query<{ email_cifrado: Buffer | null }>('select email_cifrado from users where id = $1', [userId]);
+  const dados = rows[0]?.email_cifrado;
+  return dados ? decifrar(dados, segredos.emailChave) : null;
 }
