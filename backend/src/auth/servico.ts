@@ -31,7 +31,7 @@ const BLOQUEIO_MAX_MIN = 15;
 type Cliente = Pick<Db, 'query'>;
 
 /** Registo de auditoria: só ids e o tipo de ação. Nunca emails, palavras-passe nem dados de saúde. */
-async function auditar(db: Cliente, acao: string, userId: string | null, ip: string | undefined): Promise<void> {
+export async function auditar(db: Cliente, acao: string, userId: string | null, ip: string | undefined): Promise<void> {
   await db.query('insert into audit_logs (acao, entidade, entidade_id, user_id, ip) values ($1, $2, $3, $3, $4)', [
     acao,
     userId ? 'user' : null,
@@ -40,7 +40,7 @@ async function auditar(db: Cliente, acao: string, userId: string | null, ip: str
   ]);
 }
 
-async function abrirSessao(db: Cliente, userId: string, segredos: SegredosAuth, familiaId?: string): Promise<Sessao> {
+export async function abrirSessao(db: Cliente, userId: string, segredos: SegredosAuth, familiaId?: string): Promise<Sessao> {
   const { token, hash } = novoRefreshToken();
   const expira = new Date(Date.now() + REFRESH_TTL_MS);
   if (familiaId) {

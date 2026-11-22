@@ -12,6 +12,13 @@ const schema = z.object({
   EMAIL_ENC_KEY: z.string().length(43),
   /** Chave-mestra AES-256 (32 bytes em base64url) que protege a chave de cada perfil. */
   PROFILE_MASTER_KEY: z.string().length(43),
+  /** Entrar com a Apple: o identificador da aplicação (`aud` do ID token). Sem isto o endpoint responde 501. */
+  APPLE_CLIENT_ID: z.string().min(1).optional(),
+  /** Entrar com a Google: os identificadores de cliente aceites (web, Android, iOS), separados por vírgulas. */
+  GOOGLE_CLIENT_IDS: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined)),
 });
 
 export type Config = z.infer<typeof schema>;

@@ -6,6 +6,7 @@ import type { Db } from '../db.js';
 import { atualizarConta, telefoneDoUtilizador } from './conta.js';
 import { lerChave } from './cifra.js';
 import { ErroAuth } from './erros.js';
+import { criarVerificadorExterno, entrarComFornecedor, type Provedor, type VerificadorExterno } from './externo.js';
 import { exigirAutenticacao } from './middleware.js';
 import { entrar, perfilDoUtilizador, registar, renovar, sair } from './servico.js';
 
@@ -30,11 +31,21 @@ const contaSchema = z
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, 'nada para alterar');
+const externoSchema = z.object({
+  idToken: z.string().min(20).max(4096),
+  /** O nonce em claro que a app gerou e enviou ao fornecedor. */
+  nonce: z.string().min(8).max(200),
+  nome: z.string().trim().min(1).max(60).optional(),
+  aceitaTermos: z.boolean().optional(),
+  consentimentoVersao: z.string().min(1).max(20).default(VERSAO_CONSENTIMENTO_ATUAL),
+});
 const refreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
 
 export interface OpcoesAuth {
   /** Limita os pedidos por IP nas rotas de entrada (desligável nos testes). */
   limitarPorIp?: { janelaMs: number; maximo: number } | false;
+  /** Valida os ID tokens da Apple e da Google (os testes injetam chaves locais). */
+  verificadorExterno?: VerificadorExterno;
 }
 
 export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Router {
@@ -44,7 +55,7 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
   const limite = opcoes.limitarPorIp ?? { janelaMs: 60_000, maximo: 20 };
   if (limite) {
     router.use(
-      ['/registo', '/register', '/login', '/refresh'],
+      ['/registo', '/register', '/login', '/refresh', '/apple', '/google'],
       rateLimit({
         windowMs: limite.janelaMs,
         limit: limite.maximo,
@@ -74,6 +85,17 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
     const perfil = await perfilDoUtilizador(db, userId);
     res.json({ utilizador: { id: userId, nome: perfil?.nome ?? null }, ...sessao });
   });
+
+  const verificador =
+    opcoes.verificadorExterno ?? criarVerificadorExterno({ appleClientId: config.APPLE_CLIENT_ID, googleClientIds: config.GOOGLE_CLIENT_IDS });
+  for (const provedor of ['apple', 'google'] as Provedor[]) {
+    router.post(`/${provedor}`, async (req, res) => {
+      const d = externoSchema.parse(req.body);
+      const identidade = await verificador.verificar(provedor, d.idToken, d.nonce);
+      const r = await entrarComFornecedor(db, provedor, identidade, d, segredos, req.ip);
+      res.status(r.novo ? 201 : 200).json({ utilizador: { id: r.userId, nome: r.nome }, ...r.sessao });
+    });
+  }
 
   router.post('/refresh', async (req, res) => {
     const d = refreshSchema.parse(req.body);
