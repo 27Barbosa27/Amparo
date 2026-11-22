@@ -5,20 +5,10 @@ import { exigirAutenticacao } from '../auth/middleware.js';
 import { VERSAO_CONSENTIMENTO_ATUAL } from '../auth/rotas.js';
 import type { Config } from '../config.js';
 import type { Db } from '../db.js';
+import { rotasMedicacao } from '../medicacao/rotas.js';
+import { timezoneSchema } from './validacao.js';
 import { acessoPorCabecalho, acessoPorParametro, exigirPapel, ErroPerfil } from './acesso.js';
 import { alterarPerfil, apagarPerfil, criarPerfil, listarPerfis, obterPerfil } from './servico.js';
-
-const timezoneSchema = z
-  .string()
-  .max(64)
-  .refine((tz) => {
-    try {
-      new Intl.DateTimeFormat('pt-PT', { timeZone: tz });
-      return true;
-    } catch {
-      return false;
-    }
-  }, 'fuso desconhecido');
 
 const tamanhoTexto = z.enum(['normal', 'grande', 'muito_grande']);
 const alarmesEm = z.enum(['dispositivo_da_pessoa', 'dispositivo_do_cuidador']);
@@ -62,6 +52,8 @@ export function rotasPerfis(db: Db, config: Config): Router {
   // Tudo o que está abaixo de /profiles/:profileId passa PRIMEIRO pela verificação de acesso.
   const porPerfil = Router();
   router.use('/:profileId', acessoPorParametro(db), porPerfil);
+
+  porPerfil.use(rotasMedicacao(db, chaveMestra));
 
   porPerfil.get('/', async (req, res) => {
     const perfil = await obterPerfil(db, req.userId!, req.perfil!.id);

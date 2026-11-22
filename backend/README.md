@@ -45,4 +45,6 @@ O `.env` nunca vai para o Git.
   | `GET /auth/me` | Dados do utilizador (exige `Authorization: Bearer`) |
 
   Palavras-passe em Argon2id; emails só como HMAC; token de acesso de 15 min; refresh tokens de 30 dias guardados como hash, com deteção de reutilização (revoga a família); limite de pedidos por IP.
-- Por fazer: entrada com Apple e Google, perfis e autorização (`profile_access`, testes de IDOR), ligação do telemóvel por código, sincronização e push. Ver o plano de execução em `docs/plano.md`.
+- **Perfis e permissões** (`src/perfis`): `/profiles`, papéis `owner`/`caregiver`, verificação de acesso única, testes de IDOR.
+- **Medicação** (`src/medicacao`), sob `/profiles/:id`: `medicamentos`, `receitas` (por intervalo ou horas fixas; gera e refaz as tomas) e `GET tomas?de=&ate=`. Nome, notas e dose cifrados com a chave do perfil.
+- Por fazer: entrada com Apple e Google, ligação do telemóvel por código, sincronização e push. Ver o plano de execução em `docs/plano.md`.
