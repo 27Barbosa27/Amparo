@@ -1,0 +1,33 @@
+# Segredos e credenciais (nunca enviar)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
+key.properties
+google-services.json
+GoogleService-Info.plist
+firebase-adminsdk*.json
+service-account*.json
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Node (backend)
+node_modules/
+dist/
+*.log
+
+# Base de dados local
+*.sqlite
+pgdata/
