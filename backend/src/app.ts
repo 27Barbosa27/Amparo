@@ -3,18 +3,23 @@ import helmet from 'helmet';
 import { ZodError } from 'zod';
 import { ErroAuth } from './auth/erros.js';
 import { rotasAuth, type OpcoesAuth } from './auth/rotas.js';
+import { rotasAlertPrefs } from './alertas/rotas.js';
 import { lerChave } from './auth/cifra.js';
 import { contactosDoPerfil } from './auth/conta.js';
 import { exigirPrincipal, perfilDoPedido } from './auth/principal.js';
 import type { Config } from './config.js';
 import { rotasPublicasDispositivo, type OpcoesDispositivos } from './dispositivos/rotas.js';
 import { pingDb, type Db } from './db.js';
+import { semEventos, type Eventos } from './eventos.js';
 import { ErroPerfil } from './perfis/acesso.js';
 import { rotaPerfilAtivo, rotasPerfis } from './perfis/rotas.js';
+import { rotasTomas } from './tomas/rotas.js';
 
 export interface OpcoesApp {
   auth?: OpcoesAuth;
   dispositivos?: OpcoesDispositivos;
+  /** Ganchos de push e sincronização (por omissão não fazem nada). */
+  eventos?: Eventos;
 }
 
 export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
@@ -38,6 +43,8 @@ export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
   app.use('/profiles', rotasPerfis(db, config));
   app.use('/perfil-ativo', rotaPerfilAtivo(db, config));
   app.use(rotasPublicasDispositivo(db, config, opcoes.dispositivos));
+  app.use('/tomas', rotasTomas(db, config, opcoes.eventos ?? semEventos));
+  app.use('/alert-prefs', rotasAlertPrefs(db, config));
 
   // Quem cuida da pessoa e tem telefone (para o botão "Ligar"): cuidadores e o telemóvel da pessoa.
   app.get('/contacto', exigirPrincipal(db, config.JWT_SECRET), perfilDoPedido(db), async (req, res) => {

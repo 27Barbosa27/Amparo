@@ -1,11 +1,12 @@
 import { cifrar, decifrar, lerChave } from '../auth/cifra.js';
 import type { Db } from '../db.js';
 import { gerarTomasIniciais, regenerarTomasFuturas } from '../tomas/servico.js';
+import { calcularStock, type Stock } from './stock.js';
 
 type Cliente = Pick<Db, 'query'>;
 
 /** Chave de cifra do perfil (guardada cifrada com a chave-mestra). */
-async function chaveDoPerfil(db: Cliente, profileId: string, mestra: Buffer): Promise<Buffer> {
+export async function chaveDoPerfil(db: Cliente, profileId: string, mestra: Buffer): Promise<Buffer> {
   const { rows } = await db.query<{ chave_cifrada: Buffer }>('select chave_cifrada from profiles where id = $1', [profileId]);
   if (!rows[0]) throw new Error('perfil sem chave');
   return lerChave(decifrar(rows[0].chave_cifrada, mestra));
@@ -102,6 +103,7 @@ export interface Receita {
   fim: Date | null;
   validaAte: string | null;
   unidadesIniciais: number | null;
+  stock: Stock | null;
   ativa: boolean;
 }
 
@@ -118,26 +120,33 @@ interface LinhaReceita {
   valida_ate: string | null;
   unidades_iniciais: number | null;
   ativa: boolean;
+  tomadas: number;
 }
 
 const COLUNAS_RECEITA = `id, medicamento_id, dose_cifrada, tipo, intervalo_horas::text as intervalo_horas,
-  horas_locais::text[] as horas_locais, timezone, inicio_utc, fim_utc, valida_ate::text as valida_ate, unidades_iniciais, ativa`;
+  horas_locais::text[] as horas_locais, timezone, inicio_utc, fim_utc, valida_ate::text as valida_ate, unidades_iniciais, ativa,
+  (select count(*)::int from tomas t where t.receita_id = receitas.id and t.estado = 'tomada') as tomadas`;
 
-const paraReceita = (l: LinhaReceita, chave: Buffer): Receita => ({
-  id: l.id,
-  medicamentoId: l.medicamento_id,
-  dose: decifrar(l.dose_cifrada, chave),
-  horario:
+const paraReceita = (l: LinhaReceita, chave: Buffer): Receita => {
+  const dose = decifrar(l.dose_cifrada, chave);
+  const horario: Horario =
     l.tipo === 'intervalo'
       ? { tipo: 'intervalo', intervaloHoras: Number(l.intervalo_horas) }
-      : { tipo: 'horas_fixas', horasLocais: (l.horas_locais ?? []).map((h) => h.slice(0, 5)) },
-  timezone: l.timezone,
-  inicio: l.inicio_utc,
-  fim: l.fim_utc,
-  validaAte: l.valida_ate,
-  unidadesIniciais: l.unidades_iniciais,
-  ativa: l.ativa,
-});
+      : { tipo: 'horas_fixas', horasLocais: (l.horas_locais ?? []).map((h) => h.slice(0, 5)) };
+  return {
+    id: l.id,
+    medicamentoId: l.medicamento_id,
+    dose,
+    horario,
+    timezone: l.timezone,
+    inicio: l.inicio_utc,
+    fim: l.fim_utc,
+    validaAte: l.valida_ate,
+    unidadesIniciais: l.unidades_iniciais,
+    stock: calcularStock(dose, horario, l.unidades_iniciais, l.tomadas),
+    ativa: l.ativa,
+  };
+};
 
 const colunasHorario = (h: Horario) =>
   h.tipo === 'intervalo' ? [h.tipo, h.intervaloHoras, null] : [h.tipo, null, h.horasLocais];
