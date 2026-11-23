@@ -474,4 +474,144 @@ void main() {
       },
     );
   });
+
+  group('Pessoas e receitas (tradução para a API)', () {
+    late ({Servidor servidor, ClienteApi api, SessaoMemoria sessao}) m;
+    late RepositorioApi repo;
+    setUp(() {
+      m = montar();
+      m.sessao.guardar(acesso: 'a', renovacao: 'r');
+      repo = RepositorioApi(m.api);
+    });
+
+    test('criar pessoa envia o pseudónimo, as escolhas e a declaração de autorização', () async {
+      m.servidor.responder('POST /profiles', {
+        'perfil': {'id': 'p9', 'pseudonimo': 'Avó Rosa', 'papel': 'owner'},
+      }, 201);
+      final p = await repo.criarPessoa(
+        const NovaPessoa(
+          nome: '  Avó Rosa ',
+          alarmesEm: AlarmesEm.cuidador,
+          tamanhoTexto: TamanhoTexto.muitoGrande,
+        ),
+      );
+      expect((p.id, p.nome), ('p9', 'Avó Rosa'));
+      final corpo =
+          jsonDecode(m.servidor.de('POST /profiles').single.body) as Map;
+      expect(corpo, {
+        'pseudonimo': 'Avó Rosa',
+        'tamanhoTexto': 'muito_grande',
+        'alarmesEm': 'dispositivo_do_cuidador',
+        'autorizacaoDeclarada': true,
+      });
+    });
+
+    test('as receitas juntam o nome do medicamento, os dias que restam e a validade', () async {
+      m.servidor.responder('GET /medicamentos', {
+        'medicamentos': [
+          {'id': 'm1', 'nome': 'Lisinopril 10 mg', 'notas': null},
+        ],
+      });
+      m.servidor.responder('GET /receitas', {
+        'receitas': [
+          {
+            'id': 'r1',
+            'medicamentoId': 'm1',
+            'dose': '1 comprimido',
+            'ativa': true,
+            'horario': {'tipo': 'intervalo', 'intervaloHoras': 8},
+            'validaAte': '2027-03-15',
+            'unidadesIniciais': 30,
+            'stock': {'unidadesRestantes': 4, 'diasRestantes': 1},
+          },
+          {
+            'id': 'r2',
+            'medicamentoId': 'm1',
+            'dose': '1',
+            'ativa': true,
+            'horario': {
+              'tipo': 'horas_fixas',
+              'horasLocais': ['08:00', '20:00'],
+            },
+            'validaAte': null,
+            'unidadesIniciais': null,
+            'stock': null,
+          },
+        ],
+      });
+      final l = await repo.receitas('p1');
+      expect(
+        m.servidor.de('GET /receitas').single.headers['x-profile-id'],
+        'p1',
+      );
+      expect(l[0].medicamento, 'Lisinopril 10 mg');
+      expect(l[0].horario, 'De 8 em 8 horas');
+      expect(l[0].validaAte, DateTime(2027, 3, 15));
+      expect((l[0].unidadesRestantes, l[0].diasRestantes), (4, 1));
+      expect(l[0].fracaoRestante, closeTo(4 / 30, 1e-9));
+      expect(l[1].horario, '08:00, 20:00');
+      expect((l[1].diasRestantes, l[1].fracaoRestante), (null, null));
+    });
+
+    test(
+      'criar receita cria o medicamento e depois a receita em modo assíncrono',
+      () async {
+        m.servidor.responder('POST /medicamentos', {
+          'medicamento': {'id': 'm7', 'nome': 'Ramipril 5 mg'},
+        }, 201);
+        m.servidor.responder('POST /receitas', {
+          'receita': {
+            'id': 'r7',
+            'medicamentoId': 'm7',
+            'dose': '1 comprimido',
+            'ativa': true,
+            'horario': {'tipo': 'intervalo', 'intervaloHoras': 8},
+            'geracao': {'estado': 'a_gerar', 'tomasGeradas': 0},
+          },
+        }, 202);
+        final nova = NovaReceita(
+          medicamento: ' Ramipril 5 mg ',
+          dose: '1 comprimido',
+          frequencia: Frequencia.cadaOitoHoras,
+          hora: 8,
+          minuto: 0,
+          duracao: Duracao.tresMeses,
+        );
+        final r = await repo.criarReceita(
+          'p1',
+          nova,
+          DateTime(2026, 11, 21, 13),
+        );
+        expect(
+          (r.id, r.medicamento, r.horario),
+          ('r7', 'Ramipril 5 mg', 'De 8 em 8 horas'),
+        );
+        expect(jsonDecode(m.servidor.de('POST /medicamentos').single.body), {
+          'nome': 'Ramipril 5 mg',
+        });
+        final pedido = m.servidor.de('POST /receitas').single;
+        expect(pedido.url.queryParameters, {'assincrono': 'true'});
+        expect(pedido.headers['x-profile-id'], 'p1');
+        final corpo = jsonDecode(pedido.body) as Map;
+        expect(corpo['medicamentoId'], 'm7');
+        expect(corpo['horario'], {'tipo': 'intervalo', 'intervaloHoras': 8});
+      },
+    );
+
+    test('o estado da geração traduz as três fases', () async {
+      for (final (texto, fase) in [
+        ('a_gerar', FaseGeracao.aGerar),
+        ('concluida', FaseGeracao.concluida),
+        ('falhou', FaseGeracao.falhou),
+      ]) {
+        m.servidor.responder('GET /receitas/r7/geracao', {
+          'estado': texto,
+          'tomasGeradas': 90,
+          'passos': [],
+        });
+        final e = await repo.estadoGeracao('p1', 'r7');
+        expect((e.fase, e.tomasGeradas), (fase, 90));
+      }
+    });
+  });
 }

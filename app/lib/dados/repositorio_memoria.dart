@@ -1,10 +1,14 @@
 import '../dominio/modelos.dart';
+import 'corpo_receita.dart';
 import 'repositorio.dart';
 
 /// Dados falsos, tirados do design (Maria, Lisinopril, Metformina...), para desenvolver e testar os ecrãs
 /// sem servidor. As horas são relativas ao "agora" com que é criado, por isso o dia faz sempre sentido.
 class RepositorioMemoria implements Repositorio {
-  RepositorioMemoria({required DateTime agora}) {
+  // `vazio` não pode ser `this._vazio`: um parâmetro nomeado não pode começar por "_".
+  RepositorioMemoria({required DateTime agora, bool vazio = false})
+    // ignore: prefer_initializing_formals
+    : _vazio = vazio {
     final dia = DateTime(agora.year, agora.month, agora.day);
     DateTime h(int hora, [int min = 0]) =>
         DateTime(dia.year, dia.month, dia.day, hora, min);
@@ -44,6 +48,8 @@ class RepositorioMemoria implements Repositorio {
     ];
   }
 
+  /// Sem nenhuma pessoa (uma conta nova), para testar o ecrã vazio.
+  final bool _vazio;
   final Map<String, List<Toma>> _tomas = {};
 
   static const _perfis = [
@@ -52,7 +58,10 @@ class RepositorioMemoria implements Repositorio {
   ];
 
   @override
-  Future<List<Perfil>> perfis() async => _perfis;
+  Future<List<Perfil>> perfis() async => [
+    if (!_vazio) ..._perfis,
+    ..._perfisExtra,
+  ];
 
   @override
   Future<List<Toma>> tomasDeHoje(String perfilId, DateTime agora) async =>
@@ -162,4 +171,119 @@ class RepositorioMemoria implements Repositorio {
 
   @override
   Future<String?> nomeDoCuidador(String perfilId) async => 'Ana';
+
+  // ---- pessoas e receitas (dados falsos) ----
+  final List<Perfil> _perfisExtra = [];
+  final Map<String, List<Receita>> _receitas = {};
+  final Map<String, int> _geradas = {};
+  int _seq = 0;
+
+  @override
+  Future<Perfil> criarPessoa(NovaPessoa pessoa) async {
+    final p = Perfil(id: 'novo${++_seq}', nome: pessoa.nome.trim());
+    _perfisExtra.add(p);
+    _tomas[p.id] = [];
+    return p;
+  }
+
+  @override
+  Future<List<Receita>> receitas(String perfilId) async {
+    final base = perfilId == 'maria'
+        ? <Receita>[
+            Receita(
+              id: 'rc1',
+              medicamento: 'Lisinopril 10 mg',
+              dose: '1 comprimido',
+              horario: '09:00',
+              ativa: true,
+              validaAte: DateTime(2027, 3, 15),
+              unidadesIniciais: 30,
+              unidadesRestantes: 4,
+              diasRestantes: 4,
+            ),
+            Receita(
+              id: 'rc2',
+              medicamento: 'Metformina 500 mg',
+              dose: '1 comprimido',
+              horario: '08:00, 13:00',
+              ativa: true,
+              validaAte: DateTime(2027, 6, 2),
+              unidadesIniciais: 60,
+              unidadesRestantes: 35,
+              diasRestantes: 23,
+            ),
+            Receita(
+              id: 'rc3',
+              medicamento: 'Atorvastatina 20 mg',
+              dose: '1 comprimido',
+              horario: '21:00',
+              ativa: true,
+              validaAte: DateTime(2027, 1, 30),
+              unidadesIniciais: 50,
+              unidadesRestantes: 41,
+              diasRestantes: 41,
+            ),
+          ]
+        : const <Receita>[];
+    return [...base, ...?_receitas[perfilId]];
+  }
+
+  @override
+  Future<Receita> criarReceita(
+    String perfilId,
+    NovaReceita receita,
+    DateTime agora,
+  ) async {
+    final r = Receita(
+      id: 'rc${++_seq}',
+      medicamento: receita.medicamento.trim(),
+      dose: receita.dose,
+      horario: receita.frequencia == Frequencia.cadaOitoHoras
+          ? 'De 8 em 8 horas'
+          : receita.primeiraTomaTexto,
+      ativa: true,
+    );
+    (_receitas[perfilId] ??= []).add(r);
+    // As tomas de hoje, nos horários da receita.
+    final dia = DateTime(agora.year, agora.month, agora.day);
+    final horario =
+        corpoDaReceita(receita, r.id, agora)['horario'] as Map<String, Object?>;
+    final horas = horario['tipo'] == 'intervalo'
+        ? [
+            for (var h = receita.hora; h < 24; h += 8)
+              DateTime(dia.year, dia.month, dia.day, h, receita.minuto),
+          ]
+        : [
+            for (final x in horario['horasLocais'] as List)
+              DateTime(
+                dia.year,
+                dia.month,
+                dia.day,
+                int.parse((x as String).substring(0, 2)),
+                int.parse(x.substring(3)),
+              ),
+          ];
+    final lista = (_tomas[perfilId] ??= []);
+    for (final h in horas) {
+      lista.add(
+        Toma(
+          id: 'g${++_seq}',
+          medicamento: r.medicamento,
+          dose: r.dose,
+          agendada: h,
+        ),
+      );
+    }
+    _geradas[r.id] = horas.length;
+    return r;
+  }
+
+  @override
+  Future<EstadoGeracao> estadoGeracao(
+    String perfilId,
+    String receitaId,
+  ) async => EstadoGeracao(
+    fase: FaseGeracao.concluida,
+    tomasGeradas: _geradas[receitaId] ?? 0,
+  );
 }

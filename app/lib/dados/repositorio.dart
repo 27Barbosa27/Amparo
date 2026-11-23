@@ -1,9 +1,12 @@
 import '../dominio/modelos.dart';
 
-/// A fronteira entre a app e os dados. Hoje há só a versão com dados falsos ([RepositorioMemoria]);
-/// a seguir entra a versão que fala com a API (`backend/`), sem mexer nos ecrãs.
+/// A fronteira entre a app e os dados. Há a versão com dados falsos ([RepositorioMemoria]) e a que
+/// fala com a API ([RepositorioApi]); os ecrãs não sabem qual é.
 abstract class Repositorio {
   Future<List<Perfil>> perfis();
+
+  /// Adiciona uma pessoa acompanhada. O cuidador declara que tem a autorização dela (o backend exige-o).
+  Future<Perfil> criarPessoa(NovaPessoa pessoa);
 
   /// As tomas do dia (da meia-noite à meia-noite local) de `agora`.
   Future<List<Toma>> tomasDeHoje(String perfilId, DateTime agora);
@@ -27,6 +30,18 @@ abstract class Repositorio {
 
   /// Só funciona até 1 minuto depois do registo.
   Future<Toma> desfazer(String perfilId, String tomaId, DateTime agora);
+
+  /// As receitas da pessoa, com os dias que restam e a validade.
+  Future<List<Receita>> receitas(String perfilId);
+
+  /// Cria o medicamento e a receita. As tomas geram-se em segundo plano: seguir com [estadoGeracao].
+  Future<Receita> criarReceita(
+    String perfilId,
+    NovaReceita receita,
+    DateTime agora,
+  );
+
+  Future<EstadoGeracao> estadoGeracao(String perfilId, String receitaId);
 
   /// Os últimos 7 dias (o último é hoje), para o cartão de adesão.
   Future<List<DiaAdesao>> ultimos7Dias(String perfilId, DateTime agora);

@@ -132,3 +132,140 @@ int percentagemAdesao(List<DiaAdesao> dias) {
       .length;
   return (bons * 100 / fechados.length).round();
 }
+
+// ---------- Pessoas e receitas novas ----------
+
+/// Quem recebe os alarmes: a própria pessoa (liga o telemóvel com um código) ou o cuidador.
+enum AlarmesEm { pessoa, cuidador }
+
+enum TamanhoTexto { normal, grande, muitoGrande }
+
+class NovaPessoa {
+  const NovaPessoa({
+    required this.nome,
+    required this.alarmesEm,
+    required this.tamanhoTexto,
+  });
+  final String nome;
+  final AlarmesEm alarmesEm;
+  final TamanhoTexto tamanhoTexto;
+}
+
+/// "Com que frequência?" do formulário (ver o mapa no plano, secção 3.1).
+enum Frequencia { cadaOitoHoras, duasVezesDia, umaVezDia, outra }
+
+/// "Durante quanto tempo?" (no máximo 3 meses por geração, depois renova).
+enum Duracao { seteDias, umMes, tresMeses }
+
+extension DuracaoDias on Duracao {
+  int get dias => switch (this) {
+    Duracao.seteDias => 7,
+    Duracao.umMes => 30,
+    Duracao.tresMeses => 90,
+  };
+  String get texto => switch (this) {
+    Duracao.seteDias => '7 dias',
+    Duracao.umMes => '1 mês',
+    Duracao.tresMeses => '3 meses',
+  };
+}
+
+extension FrequenciaTexto on Frequencia {
+  String get texto => switch (this) {
+    Frequencia.cadaOitoHoras => 'De 8 em 8 horas',
+    Frequencia.duasVezesDia => '2 vezes ao dia',
+    Frequencia.umaVezDia => '1 vez ao dia',
+    Frequencia.outra => 'Outra',
+  };
+}
+
+class NovaReceita {
+  const NovaReceita({
+    required this.medicamento,
+    required this.dose,
+    required this.frequencia,
+    required this.hora,
+    required this.minuto,
+    required this.duracao,
+    this.horasOutra = const [],
+  });
+
+  final String medicamento;
+  final String dose;
+  final Frequencia frequencia;
+
+  /// Hora da primeira toma (relógio local).
+  final int hora;
+  final int minuto;
+  final Duracao duracao;
+
+  /// Só para `Frequencia.outra`: as horas escolhidas ("08:00", "14:00"...).
+  final List<String> horasOutra;
+
+  String get primeiraTomaTexto =>
+      '${hora.toString().padLeft(2, '0')}:${minuto.toString().padLeft(2, '0')}';
+
+  /// "De 8 em 8 horas · 3 meses".
+  String get resumo => '${frequencia.texto} · ${duracao.texto}';
+
+  /// A primeira toma real: hoje se a hora ainda não passou, senão amanhã (só para "De 8 em 8 horas",
+  /// que conta a partir da primeira toma; nas outras, as tomas de hoje que ainda faltam também contam).
+  DateTime primeiraToma(DateTime agora) {
+    final hoje = DateTime(agora.year, agora.month, agora.day, hora, minuto);
+    return hoje.isAfter(agora) ? hoje : hoje.add(const Duration(days: 1));
+  }
+
+  /// "Hoje, às 08:00" ou "Amanhã, às 08:00".
+  String primeiraTomaPorExtenso(DateTime agora) {
+    final t = primeiraToma(agora);
+    final hoje = DateTime(agora.year, agora.month, agora.day);
+    final quando = DateTime(t.year, t.month, t.day) == hoje ? 'Hoje' : 'Amanhã';
+    return '$quando, às $primeiraTomaTexto';
+  }
+}
+
+class Receita {
+  const Receita({
+    required this.id,
+    required this.medicamento,
+    required this.dose,
+    required this.horario,
+    required this.ativa,
+    this.validaAte,
+    this.unidadesIniciais,
+    this.unidadesRestantes,
+    this.diasRestantes,
+  });
+
+  final String id;
+  final String medicamento;
+  final String dose;
+
+  /// "De 8 em 8 horas" ou "08:00, 20:00".
+  final String horario;
+  final bool ativa;
+  final DateTime? validaAte;
+  final int? unidadesIniciais;
+  final int? unidadesRestantes;
+  final int? diasRestantes;
+
+  /// Fração do stock que resta (0 a 1), para a barra. Nula se não há unidades iniciais.
+  double? get fracaoRestante {
+    final i = unidadesIniciais;
+    final r = unidadesRestantes;
+    if (i == null || r == null || i <= 0) return null;
+    return (r / i).clamp(0.0, 1.0);
+  }
+
+  /// "Acaba em N dias": quando os dias que restam chegam ao limite do aviso (por omissão 4).
+  bool aAcabar([int limite = 4]) =>
+      diasRestantes != null && diasRestantes! <= limite;
+}
+
+enum FaseGeracao { aGerar, concluida, falhou }
+
+class EstadoGeracao {
+  const EstadoGeracao({required this.fase, required this.tomasGeradas});
+  final FaseGeracao fase;
+  final int tomasGeradas;
+}

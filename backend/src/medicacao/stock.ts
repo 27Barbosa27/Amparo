@@ -1,7 +1,14 @@
 import type { Horario } from './servico.js';
 
-/** Unidades por toma, lidas do início da dose ("2 comprimidos" → 2, "1/2 comprimido" → 0.5). Sem número: 1. */
+/** Concentrações e volumes ("10 mg", "5 ml", "1000 UI"): descrevem o medicamento, não quantas unidades se tomam. */
+const CONCENTRACAO = /^\s*\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|ug|g|kg|ml|l|ui|iu|%)(?![a-zçãõé])/i;
+
+/**
+ * Unidades por toma, lidas do início da dose ("2 comprimidos" → 2, "1/2 comprimido" → 0.5).
+ * Uma concentração ("10 mg") NÃO conta como quantidade: nesse caso, e quando não há número, é 1 unidade.
+ */
 export function unidadesPorToma(dose: string): number {
+  if (CONCENTRACAO.test(dose)) return 1;
   const fracao = /^\s*(\d+)\s*\/\s*(\d+)/.exec(dose);
   if (fracao) {
     const [num, den] = [Number(fracao[1]), Number(fracao[2])];

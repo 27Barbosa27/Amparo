@@ -165,7 +165,7 @@ void main() {
       await entrar(tester);
       await tester.tap(find.byIcon(Icons.description_outlined));
       await tester.pumpAndSettle();
-      expect(find.text('Medicamentos de Maria'), findsOneWidget);
+      expect(find.text('3 medicamentos de Maria'), findsOneWidget);
       await tester.tap(find.byIcon(Icons.settings_outlined));
       await tester.pumpAndSettle();
       expect(find.text('Ver como a pessoa vê'), findsOneWidget);

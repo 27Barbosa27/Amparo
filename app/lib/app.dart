@@ -5,14 +5,18 @@ import 'dados/autenticacao.dart';
 import 'dados/repositorio.dart';
 import 'dominio/modelos.dart';
 import 'estado/hoje_controlador.dart';
+import 'estado/receitas_controlador.dart';
 import 'tema/tema.dart';
 import 'tema/tokens.dart';
 import 'ui/componentes/base.dart';
+import 'ui/componentes/formulario.dart';
 import 'ui/componentes/ilha_navegacao.dart';
+import 'ui/ecras/adicionar_pessoa.dart';
 import 'ui/ecras/cuidador_hoje.dart';
 import 'ui/ecras/entrar.dart';
 import 'ui/ecras/idoso_hoje.dart';
 import 'ui/ecras/outros.dart';
+import 'ui/ecras/receita_nova.dart';
 import 'ui/ecras/sucesso_marcada.dart';
 
 /// A raiz da app. Recebe o repositório (dados falsos por agora, a API depois) e o relógio (para os testes).
@@ -46,6 +50,9 @@ enum _Modo { aArrancar, entrar, semPessoas, cuidador, previewPessoa, sucesso }
 
 class _AmparoAppState extends State<AmparoApp> {
   late bool _escuro = widget.escuroInicial;
+
+  /// Só para abrir ecrãs empurrados em desenvolvimento (`TELA=pessoa-nova`, `receita-nova`).
+  final _navegador = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -86,6 +93,19 @@ class _AmparoAppState extends State<AmparoApp> {
     switch (widget.telaInicial) {
       case 'simples':
         _modo = _Modo.previewPessoa;
+      case 'receitas':
+        _separador = 1;
+        await _receitas?.carregar();
+      case 'pessoa-nova' || 'receita-nova':
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final ctx = _navegador.currentContext;
+          if (ctx == null || !ctx.mounted) return;
+          if (widget.telaInicial == 'pessoa-nova') {
+            _adicionarPessoa(ctx);
+          } else {
+            _fluxoReceita(ctx, _controlador!.perfil);
+          }
+        });
       case 'sucesso':
         final pendentes = _controlador!.tomas.where(
           (t) => t.estado == EstadoToma.pendente,
@@ -102,6 +122,7 @@ class _AmparoAppState extends State<AmparoApp> {
   _Modo _modo = _Modo.aArrancar;
   String? _tomaDoSucesso;
   HojeControlador? _controlador;
+  ReceitasControlador? _receitas;
   List<Perfil> _perfis = const [];
   int _separador = 0;
 
@@ -136,12 +157,20 @@ class _AmparoAppState extends State<AmparoApp> {
   void _voltarAEntrar() {
     _controlador?.dispose();
     _controlador = null;
+    _receitas?.dispose();
+    _receitas = null;
     _separador = 0;
     if (mounted) setState(() => _modo = _Modo.entrar);
   }
 
   void _abrirPerfil(Perfil p) {
     _controlador?.dispose();
+    _receitas?.dispose();
+    _receitas = ReceitasControlador(
+      repositorio: widget.repositorio,
+      perfil: p,
+      aoSessaoExpirada: _voltarAEntrar,
+    )..carregar();
     _controlador = HojeControlador(
       repositorio: widget.repositorio,
       perfil: p,
@@ -159,14 +188,76 @@ class _AmparoAppState extends State<AmparoApp> {
       builder: (c) =>
           _EscolherPerfil(perfis: _perfis, atual: _controlador!.perfil),
     );
-    if (escolhido != null && escolhido.id != _controlador!.perfil.id) {
+    if (escolhido == null || !context.mounted) return;
+    if (escolhido.id == _novaPessoa.id) {
+      _adicionarPessoa(context);
+    } else if (escolhido.id != _controlador!.perfil.id) {
       _abrirPerfil(escolhido);
     }
+  }
+
+  /// "Adicionar receita": formulário, geração das tomas no servidor e resultado.
+  void _fluxoReceita(BuildContext context, Perfil perfil) {
+    FluxoReceita(
+      repositorio: widget.repositorio,
+      perfil: perfil,
+      relogio: widget.relogio,
+      aoVerHoje: () {
+        _controlador?.carregar();
+        _receitas?.carregar();
+        setState(() => _separador = 0);
+      },
+    ).abrir(context);
+  }
+
+  /// "Adicionar pessoa": cria o perfil, passa a acompanhá-lo e mostra o resultado.
+  void _adicionarPessoa(BuildContext context) {
+    Navigator.of(context).push(
+      rotaPagina<void>(
+        Builder(
+          builder: (ctx) => AdicionarPessoaEcra(
+            aoCriar: (nova) async {
+              try {
+                final pessoa = await widget.repositorio.criarPessoa(nova);
+                _perfis = await widget.repositorio.perfis();
+                _modo = _Modo.cuidador;
+                _separador = 0;
+                _abrirPerfil(pessoa);
+                if (!ctx.mounted) return null;
+                Navigator.of(ctx).pushReplacement(
+                  rotaPagina<void>(
+                    Builder(
+                      builder: (c2) => SucessoPessoaEcra(
+                        pessoa: pessoa,
+                        alarmesNaPessoa: nova.alarmesEm == AlarmesEm.pessoa,
+                        aoLigarTelemovel: () => _aviso(
+                          c2,
+                          'O ecrã "Ligar o telemóvel" vem a seguir.',
+                        ),
+                        aoAdicionarReceita: () => _fluxoReceita(c2, pessoa),
+                        aoConcluir: () =>
+                            Navigator.of(c2).popUntil((r) => r.isFirst),
+                      ),
+                    ),
+                  ),
+                );
+                return null;
+              } on ErroApi catch (e) {
+                return e.codigo;
+              } catch (_) {
+                return 'falha_ao_guardar';
+              }
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _controlador?.dispose();
+    _receitas?.dispose();
     super.dispose();
   }
 
@@ -174,6 +265,7 @@ class _AmparoAppState extends State<AmparoApp> {
   Widget build(BuildContext context) {
     final tokens = _escuro ? Tokens.escuroTema : Tokens.claroTema;
     return MaterialApp(
+      navigatorKey: _navegador,
       title: 'Amparo',
       debugShowCheckedModeBanner: false,
       theme: criarTema(tokens),
@@ -197,7 +289,10 @@ class _AmparoAppState extends State<AmparoApp> {
       case _Modo.aArrancar:
         return const Center(child: CircularProgressIndicator());
       case _Modo.semPessoas:
-        return _SemPessoas(aoTerminarSessao: _terminarSessao);
+        return _SemPessoas(
+          aoAdicionar: () => _adicionarPessoa(context),
+          aoTerminarSessao: _terminarSessao,
+        );
       case _Modo.entrar:
         return EntrarEcra(
           aoEntrar: _entrar,
@@ -258,7 +353,14 @@ class _AmparoAppState extends State<AmparoApp> {
             controlador: c!,
             aoTrocarPerfil: () => _trocarPerfil(context),
           ),
-          1 => ReceitasEcra(controlador: c!),
+          1 => ReceitasEcra(
+            controlador: _receitas!,
+            aoAdicionar: () => _fluxoReceita(context, c!.perfil),
+            aoPedirRenovacao: (r) => _aviso(
+              context,
+              'O pedido de renovação ao médico vem a seguir.',
+            ),
+          ),
           _ => MaisEcra(
             escuro: _escuro,
             aoMudarTema: (v) => setState(() => _escuro = v),
@@ -273,13 +375,19 @@ class _AmparoAppState extends State<AmparoApp> {
             IlhaNavegacao(
               destinos: destinos,
               atual: _separador,
-              aoMudar: (i) => setState(() => _separador = i),
+              aoMudar: (i) {
+                if (i == 1) _receitas?.carregar();
+                setState(() => _separador = i);
+              },
             ),
           ],
         );
     }
   }
 }
+
+/// Marca o "Adicionar pessoa" do seletor (não é uma pessoa verdadeira).
+const _novaPessoa = Perfil(id: '__nova__', nome: '');
 
 class _EscolherPerfil extends StatelessWidget {
   const _EscolherPerfil({required this.perfis, required this.atual});
@@ -324,6 +432,32 @@ class _EscolherPerfil extends StatelessWidget {
                     onTap: () => Navigator.of(context).pop(p),
                   ),
                 ),
+              Semantics(
+                button: true,
+                label: 'Adicionar pessoa',
+                excludeSemantics: true,
+                child: ListTile(
+                  minTileHeight: 56,
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: t.linha, width: 2),
+                    ),
+                    child: Icon(Icons.add, color: t.primaria),
+                  ),
+                  title: Text(
+                    'Adicionar pessoa',
+                    style: Estilos.corpo(
+                      t,
+                      peso: FontWeight.w700,
+                      cor: t.primaria,
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(_novaPessoa),
+                ),
+              ),
             ],
           ),
         ),
@@ -332,9 +466,13 @@ class _EscolherPerfil extends StatelessWidget {
   }
 }
 
-/// Entrou, mas ainda não há ninguém para acompanhar. O ecrã "Adicionar pessoa" vem a seguir.
+/// Entrou, mas ainda não há ninguém para acompanhar.
 class _SemPessoas extends StatelessWidget {
-  const _SemPessoas({required this.aoTerminarSessao});
+  const _SemPessoas({
+    required this.aoAdicionar,
+    required this.aoTerminarSessao,
+  });
+  final VoidCallback aoAdicionar;
   final VoidCallback aoTerminarSessao;
 
   @override
@@ -357,11 +495,20 @@ class _SemPessoas extends StatelessWidget {
                 const SizedBox(height: 12),
                 Cartao(
                   child: Text(
-                    'Ainda não adicionou ninguém. O ecrã "Adicionar pessoa" vem a seguir.',
+                    'Ainda não adicionou ninguém. Comece por adicionar a primeira pessoa.',
                     style: Estilos.corpo(t),
                   ),
                 ),
                 const SizedBox(height: 16),
+                Botao(
+                  texto: 'Adicionar pessoa',
+                  icone: Icons.add,
+                  altura: 56,
+                  raio: 20,
+                  tamanhoTexto: 17,
+                  aoTocar: aoAdicionar,
+                ),
+                const SizedBox(height: 10),
                 Botao(
                   texto: 'Terminar sessão',
                   icone: Icons.logout,

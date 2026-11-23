@@ -2,6 +2,7 @@ import 'dart:math';
 
 import '../dominio/modelos.dart';
 import 'api.dart';
+import 'corpo_receita.dart';
 import 'repositorio.dart';
 
 /// O repositório que fala com o backend. Os códigos de erro da API passam a [RegistoNaoPermitido]
@@ -191,5 +192,112 @@ class RepositorioApi implements Repositorio {
     } on ErroApi {
       return null; // um contacto em falta nunca impede de ver as tomas
     }
+  }
+
+  @override
+  Future<Perfil> criarPessoa(NovaPessoa pessoa) async {
+    final j = await _api.pedir(
+      'POST',
+      '/profiles',
+      corpo: {
+        'pseudonimo': pessoa.nome.trim(),
+        'tamanhoTexto': switch (pessoa.tamanhoTexto) {
+          TamanhoTexto.normal => 'normal',
+          TamanhoTexto.grande => 'grande',
+          TamanhoTexto.muitoGrande => 'muito_grande',
+        },
+        'alarmesEm': pessoa.alarmesEm == AlarmesEm.pessoa
+            ? 'dispositivo_da_pessoa'
+            : 'dispositivo_do_cuidador',
+        // O cuidador declara que tem a autorização da pessoa ou do seu representante
+        // (o ecrã obriga a marcar a caixa antes de criar).
+        'autorizacaoDeclarada': true,
+      },
+    );
+    final p = j!['perfil'] as Map<String, dynamic>;
+    return Perfil(id: p['id'] as String, nome: p['pseudonimo'] as String);
+  }
+
+  String _numero(Object? v) =>
+      v is num && v == v.roundToDouble() ? v.toInt().toString() : '$v';
+
+  String _horario(Map<String, dynamic> h) => h['tipo'] == 'intervalo'
+      ? 'De ${_numero(h['intervaloHoras'])} em ${_numero(h['intervaloHoras'])} horas'
+      : (h['horasLocais'] as List).join(', ');
+
+  @override
+  Future<List<Receita>> receitas(String perfilId) async {
+    final meds = await _api.pedir('GET', '/medicamentos', perfilId: perfilId);
+    final nomes = {
+      for (final m in (meds!['medicamentos'] as List))
+        m['id'] as String: m['nome'] as String,
+    };
+    final j = await _api.pedir('GET', '/receitas', perfilId: perfilId);
+    return [
+      for (final r in (j!['receitas'] as List))
+        Receita(
+          id: r['id'] as String,
+          medicamento: nomes[r['medicamentoId']] ?? 'Medicamento',
+          dose: r['dose'] as String,
+          horario: _horario(r['horario'] as Map<String, dynamic>),
+          ativa: r['ativa'] as bool,
+          validaAte: r['validaAte'] == null
+              ? null
+              : DateTime.parse(r['validaAte'] as String),
+          unidadesIniciais: r['unidadesIniciais'] as int?,
+          unidadesRestantes:
+              ((r['stock'] as Map?)?['unidadesRestantes'] as num?)?.round(),
+          diasRestantes: (r['stock'] as Map?)?['diasRestantes'] as int?,
+        ),
+    ];
+  }
+
+  @override
+  Future<Receita> criarReceita(
+    String perfilId,
+    NovaReceita receita,
+    DateTime agora,
+  ) async {
+    final med = await _api.pedir(
+      'POST',
+      '/medicamentos',
+      perfilId: perfilId,
+      corpo: {'nome': receita.medicamento.trim()},
+    );
+    final medicamentoId = (med!['medicamento'] as Map)['id'] as String;
+    // `assincrono`: o servidor responde já e gera as tomas em segundo plano; a app segue o estado.
+    final j = await _api.pedir(
+      'POST',
+      '/receitas',
+      perfilId: perfilId,
+      query: {'assincrono': 'true'},
+      corpo: corpoDaReceita(receita, medicamentoId, agora),
+    );
+    final r = j!['receita'] as Map<String, dynamic>;
+    return Receita(
+      id: r['id'] as String,
+      medicamento: receita.medicamento.trim(),
+      dose: r['dose'] as String,
+      horario: _horario(r['horario'] as Map<String, dynamic>),
+      ativa: r['ativa'] as bool,
+    );
+  }
+
+  @override
+  Future<EstadoGeracao> estadoGeracao(String perfilId, String receitaId) async {
+    final j = await _api.pedir(
+      'GET',
+      '/receitas/$receitaId/geracao',
+      perfilId: perfilId,
+    );
+    final fase = switch (j!['estado']) {
+      'concluida' => FaseGeracao.concluida,
+      'falhou' => FaseGeracao.falhou,
+      _ => FaseGeracao.aGerar,
+    };
+    return EstadoGeracao(
+      fase: fase,
+      tomasGeradas: (j['tomasGeradas'] as num).toInt(),
+    );
   }
 }

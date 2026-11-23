@@ -23,7 +23,7 @@ A conta de demonstração é `demo@amparo.test` com a palavra-passe `amparo-demo
 |---|---|
 | `API_URL=http://127.0.0.1:3000` | Endereço da API. No emulador Android usa-se `http://10.0.2.2:3000` (já é o valor por omissão lá) |
 | `DADOS=falsos` | Usa dados falsos em vez da API |
-| `TELA=hoje` / `simples` / `sucesso` / `entrar-erro` | Abre direto num ecrã (para capturas) |
+| `TELA=hoje` / `simples` / `sucesso` / `entrar-erro` / `receitas` / `pessoa-nova` / `receita-nova` | Abre direto num ecrã (para capturas) |
 | `DEV_EMAIL`, `DEV_SENHA` | Entram sozinhos quando se usa `TELA` |
 
 Para a app web (Chrome) falar com a API, o backend tem de autorizar a origem: `CORS_ORIGINS=http://127.0.0.1:8099` no `backend/.env`.
@@ -32,7 +32,7 @@ Para a app web (Chrome) falar com a API, o backend tem de autorizar a origem: `C
 
 ```bash
 flutter analyze
-flutter test                                              # 45 testes, sem servidor
+flutter test                                              # 69 testes, sem servidor
 flutter test --dart-define=API_REAL=http://127.0.0.1:3000 test/integracao_api_test.dart   # contra a API a sério
 ```
 
@@ -43,7 +43,7 @@ flutter test --dart-define=API_REAL=http://127.0.0.1:3000 test/integracao_api_te
 
 ## Estado
 
-- Feito: tema do design (claro e escuro), Entrar (com Lottie e Apple/Google), Hoje do cuidador, modo simples, "Toma marcada", Receitas (lista), Mais; ligação à API (login, renovação da sessão, perfis, tomas, marcar/saltar/desfazer, adesão de 7 dias, contacto).
+- Feito: tema do design (claro e escuro), Entrar (com Lottie e Apple/Google), Hoje do cuidador, modo simples, "Toma marcada", Receitas (aviso do que está a acabar, stock e validade), Adicionar pessoa, Adicionar receita (com a geração das tomas em segundo plano, resultado e erro), Mais; ligação à API (login, renovação da sessão, perfis, tomas, marcar/saltar/desfazer, adesão de 7 dias, contacto).
 - A sessão fica só em memória. O armazenamento seguro do sistema (Keychain/Keystore) exige o **Modo de Programador do Windows** ligado (Definições → Para programadores) porque os plugins nativos precisam de *symlinks*. O mesmo vale para as notificações e os alarmes.
-- Por fazer: Entrar com Apple/Google a sério, criar conta, "Tenho um código", adicionar pessoa e receita, alarmes locais, push, sincronização delta e fila offline, bloqueio com biometria/PIN, fonte Plus Jakarta Sans nos assets.
+- Por fazer: Entrar com Apple/Google a sério, criar conta, "Tenho um código", editar e apagar receitas e pessoas, pedir renovação ao médico, alarmes locais, push, sincronização delta e fila offline, bloqueio com biometria/PIN, fonte Plus Jakarta Sans nos assets.
 - Os Lottie em `assets/lottie/` vieram de `Downloads`: falta confirmar as licenças.

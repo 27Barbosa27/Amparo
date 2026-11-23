@@ -155,6 +155,47 @@ void main() {
       );
     });
 
+    test('adicionar pessoa e receita de ponta a ponta (gera as tomas em segundo plano) e apagar no fim', () async {
+      await auth.entrar('demo@amparo.test', 'amparo-demo-123');
+      final agora = DateTime.now();
+      final pessoa = await repo.criarPessoa(
+        NovaPessoa(
+          nome: 'Teste ${agora.millisecondsSinceEpoch}',
+          alarmesEm: AlarmesEm.pessoa,
+          tamanhoTexto: TamanhoTexto.grande,
+        ),
+      );
+      try {
+        expect((await repo.perfis()).map((p) => p.id), contains(pessoa.id));
+        final nova = NovaReceita(
+          medicamento: 'Ramipril 5 mg',
+          dose: '1 comprimido',
+          frequencia: Frequencia.duasVezesDia,
+          hora: 8,
+          minuto: 0,
+          duracao: Duracao.seteDias,
+        );
+        final r = await repo.criarReceita(pessoa.id, nova, agora);
+        var e = await repo.estadoGeracao(pessoa.id, r.id);
+        for (var i = 0; i < 40 && e.fase == FaseGeracao.aGerar; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+          e = await repo.estadoGeracao(pessoa.id, r.id);
+        }
+        expect(e.fase, FaseGeracao.concluida);
+        expect(e.tomasGeradas, inInclusiveRange(13, 15)); // 2 por dia, 7 dias
+        final lista = await repo.receitas(pessoa.id);
+        expect(lista.single.medicamento, 'Ramipril 5 mg');
+        expect(lista.single.horario, '08:00, 20:00');
+      } finally {
+        // não deixar lixo nos dados de demonstração
+        await api.pedir('DELETE', '/profiles/${pessoa.id}');
+      }
+      expect(
+        (await repo.perfis()).map((p) => p.id),
+        isNot(contains(pessoa.id)),
+      );
+    });
+
     test(
       'a sessão renova-se sozinha quando o token de acesso é inválido',
       () async {
