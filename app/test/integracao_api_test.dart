@@ -197,6 +197,64 @@ void main() {
     });
 
     test(
+      'criar conta: começa vazia, recusa email repetido e apaga-se no fim',
+      () async {
+        final email =
+            'registo.${DateTime.now().millisecondsSinceEpoch}@amparo.test';
+        final novaApi = ClienteApi(
+          base: Uri.parse(apiReal),
+          sessao: SessaoMemoria(),
+        );
+        final nova = AutenticacaoApi(novaApi);
+        expect(
+          await nova.registar('Rui', email, 'palavra-passe-de-teste-1'),
+          isNull,
+        );
+        try {
+          expect(nova.nome, 'Rui');
+          expect(
+            await RepositorioApi(novaApi).perfis(),
+            isEmpty,
+          ); // conta nova: ninguém para acompanhar
+          // o mesmo email outra vez
+          final outra = AutenticacaoApi(
+            ClienteApi(base: Uri.parse(apiReal), sessao: SessaoMemoria()),
+          );
+          expect(
+            await outra.registar('Rui', email, 'palavra-passe-de-teste-1'),
+            'email_ja_existe',
+          );
+          // palavra-passe curta é recusada pelo servidor
+          expect(
+            await outra.registar('Rui', 'curta.$email', 'curta'),
+            'pedido_invalido',
+          );
+          // e a conta nova entra com as credenciais
+          final entrada = AutenticacaoApi(
+            ClienteApi(base: Uri.parse(apiReal), sessao: SessaoMemoria()),
+          );
+          expect(
+            await entrada.entrar(email, 'palavra-passe-de-teste-1'),
+            isNull,
+          );
+        } finally {
+          await novaApi.pedir(
+            'DELETE',
+            '/auth/me',
+            corpo: {'senha': 'palavra-passe-de-teste-1'},
+          );
+        }
+        final depois = AutenticacaoApi(
+          ClienteApi(base: Uri.parse(apiReal), sessao: SessaoMemoria()),
+        );
+        expect(
+          await depois.entrar(email, 'palavra-passe-de-teste-1'),
+          'credenciais_invalidas',
+        );
+      },
+    );
+
+    test(
       'a sessão renova-se sozinha quando o token de acesso é inválido',
       () async {
         await auth.entrar('demo@amparo.test', 'amparo-demo-123');

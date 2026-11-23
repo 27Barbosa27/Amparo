@@ -5,6 +5,10 @@ abstract class Autenticacao {
   /// Devolve o código de erro estável (`credenciais_invalidas`, `demasiadas_tentativas`, `sem_rede`...) ou nulo se entrou.
   Future<String?> entrar(String email, String senha);
 
+  /// Cria a conta de cuidador (com o consentimento) e abre a sessão. Devolve o código de erro
+  /// (`email_ja_existe`, `pedido_invalido`, `sem_rede`...) ou nulo se correu bem.
+  Future<String?> registar(String nome, String email, String senha);
+
   /// Tenta retomar a sessão guardada. Verdadeiro se há sessão válida.
   Future<bool> restaurar();
 
@@ -36,6 +40,31 @@ class AutenticacaoApi implements Autenticacao {
         renovacao: j['refreshToken'] as String,
       );
       _nome = (j['utilizador'] as Map)['nome'] as String?;
+      return null;
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+  }
+
+  @override
+  Future<String?> registar(String nome, String email, String senha) async {
+    try {
+      final j = await _api.pedir(
+        'POST',
+        '/auth/registo',
+        corpo: {
+          'email': email,
+          'senha': senha,
+          'nome': nome,
+          'aceitaTermos': true,
+        },
+        autenticado: false,
+      );
+      await _api.sessao.guardar(
+        acesso: j!['accessToken'] as String,
+        renovacao: j['refreshToken'] as String,
+      );
+      _nome = (j['utilizador'] as Map)['nome'] as String? ?? nome;
       return null;
     } on ErroApi catch (e) {
       return e.codigo;
@@ -79,13 +108,21 @@ class AutenticacaoMemoria implements Autenticacao {
   AutenticacaoMemoria({this.nomeFixo = 'Ana'});
   final String nomeFixo;
   bool _dentro = false;
+  String? _nomeRegisto;
 
   @override
-  String? get nome => _dentro ? nomeFixo : null;
+  String? get nome => _dentro ? (_nomeRegisto ?? nomeFixo) : null;
 
   @override
   Future<String?> entrar(String email, String senha) async {
     _dentro = true;
+    return null;
+  }
+
+  @override
+  Future<String?> registar(String nome, String email, String senha) async {
+    _dentro = true;
+    _nomeRegisto = nome;
     return null;
   }
 

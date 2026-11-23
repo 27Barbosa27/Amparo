@@ -12,6 +12,7 @@ import 'ui/componentes/base.dart';
 import 'ui/componentes/formulario.dart';
 import 'ui/componentes/ilha_navegacao.dart';
 import 'ui/ecras/adicionar_pessoa.dart';
+import 'ui/ecras/criar_conta.dart';
 import 'ui/ecras/cuidador_hoje.dart';
 import 'ui/ecras/entrar.dart';
 import 'ui/ecras/idoso_hoje.dart';
@@ -196,6 +197,67 @@ class _AmparoAppState extends State<AmparoApp> {
     }
   }
 
+  /// "Criar conta": regista o cuidador, abre a sessão e oferece adicionar a primeira pessoa.
+  void _criarConta(BuildContext context) {
+    Navigator.of(context).push(
+      rotaPagina<void>(
+        Builder(
+          builder: (ctx) => CriarContaEcra(
+            aoEntrar: () => Navigator.of(ctx).maybePop(),
+            aoApple: () => _aviso(
+              ctx,
+              'Registar com a Apple liga-se quando a conta Apple Developer estiver configurada.',
+            ),
+            aoGoogle: () => _aviso(
+              ctx,
+              'Registar com a Google liga-se quando o projeto Google estiver configurado.',
+            ),
+            aoCriar: (nome, email, senha) async {
+              final erro = await widget.autenticacao.registar(
+                nome,
+                email,
+                senha,
+              );
+              if (erro != null) return erro;
+              try {
+                _perfis = await widget.repositorio.perfis();
+              } on ErroApi catch (e) {
+                return e.codigo;
+              }
+              if (_perfis.isEmpty) {
+                _modo = _Modo.semPessoas;
+              } else {
+                _abrirPerfil(_perfis.first);
+                _modo = _Modo.cuidador;
+              }
+              if (mounted) setState(() {});
+              if (!ctx.mounted) return null;
+              Navigator.of(ctx).pushReplacement(
+                rotaPagina<void>(
+                  Builder(
+                    builder: (c2) => SucessoContaEcra(
+                      nome: nome,
+                      aoAdicionarPessoa: () {
+                        Navigator.of(c2).popUntil((r) => r.isFirst);
+                        final raiz = _navegador.currentContext;
+                        if (raiz != null && raiz.mounted) {
+                          _adicionarPessoa(raiz);
+                        }
+                      },
+                      aoDepois: () =>
+                          Navigator.of(c2).popUntil((r) => r.isFirst),
+                    ),
+                  ),
+                ),
+              );
+              return null;
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   /// "Adicionar receita": formulário, geração das tomas no servidor e resultado.
   void _fluxoReceita(BuildContext context, Perfil perfil) {
     FluxoReceita(
@@ -309,8 +371,7 @@ class _AmparoAppState extends State<AmparoApp> {
           ),
           aoTerCodigo: () =>
               _aviso(context, 'O ecrã "Tenho um código" vem a seguir.'),
-          aoCriarConta: () =>
-              _aviso(context, 'O ecrã "Criar conta" vem a seguir.'),
+          aoCriarConta: () => _criarConta(context),
           aoEsquecerSenha: () =>
               _aviso(context, 'A recuperação de palavra-passe vem a seguir.'),
         );
