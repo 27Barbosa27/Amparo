@@ -8,6 +8,7 @@ import '../../estado/hoje_controlador.dart';
 import '../../tema/tema.dart';
 import '../../tema/tokens.dart';
 import '../componentes/base.dart';
+import 'sucesso_marcada.dart';
 
 String horaCurta(DateTime d) => DateFormat('HH:mm').format(d);
 
@@ -454,6 +455,24 @@ class _ItemTempo extends StatelessWidget {
   final bool ultima;
   final bool proxima;
 
+  Future<void> _marcar(BuildContext context) async {
+    final navegador = Navigator.of(context);
+    final ok = await controlador.marcarTomada(toma);
+    if (!ok) return;
+    navegador.push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          body: FundoGradiente(
+            child: SucessoMarcadaEcra(
+              controlador: controlador,
+              tomaId: toma.id,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = context.t;
@@ -516,7 +535,7 @@ class _ItemTempo extends StatelessWidget {
             Botao(
               texto: 'Marcar como tomada',
               icone: Icons.check,
-              aoTocar: () => controlador.marcarTomada(toma),
+              aoTocar: () => _marcar(context),
             ),
           ],
         ),
@@ -593,7 +612,7 @@ class _ItemTempo extends StatelessWidget {
                     icone: Icons.check,
                     fundo: const Color(0xFFFFFFFF),
                     cor: const Color(0xFF0B3B37),
-                    aoTocar: () => controlador.marcarTomada(toma),
+                    aoTocar: () => _marcar(context),
                   ),
                 ),
                 const SizedBox(width: 8),

@@ -11,6 +11,7 @@ import 'ui/ecras/cuidador_hoje.dart';
 import 'ui/ecras/entrar.dart';
 import 'ui/ecras/idoso_hoje.dart';
 import 'ui/ecras/outros.dart';
+import 'ui/ecras/sucesso_marcada.dart';
 
 /// A raiz da app. Recebe o repositório (dados falsos por agora, a API depois) e o relógio (para os testes).
 class AmparoApp extends StatefulWidget {
@@ -19,20 +20,53 @@ class AmparoApp extends StatefulWidget {
     required this.repositorio,
     this.relogio = DateTime.now,
     this.escuroInicial = true,
+    this.telaInicial = '',
   });
 
   final Repositorio repositorio;
   final Relogio relogio;
   final bool escuroInicial;
 
+  /// Só para desenvolvimento e capturas: abre direto num ecrã (`entrar-erro`, `hoje`, `simples`, `sucesso`).
+  final String telaInicial;
+
   @override
   State<AmparoApp> createState() => _AmparoAppState();
 }
 
-enum _Modo { entrar, cuidador, previewPessoa }
+enum _Modo { entrar, cuidador, previewPessoa, sucesso }
 
 class _AmparoAppState extends State<AmparoApp> {
   late bool _escuro = widget.escuroInicial;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.telaInicial.isNotEmpty &&
+        widget.telaInicial != 'entrar' &&
+        widget.telaInicial != 'entrar-erro') {
+      _arranqueDeDesenvolvimento();
+    }
+  }
+
+  Future<void> _arranqueDeDesenvolvimento() async {
+    _perfis = await widget.repositorio.perfis();
+    _abrirPerfil(_perfis.first);
+    await _controlador!.carregar();
+    switch (widget.telaInicial) {
+      case 'simples':
+        _modo = _Modo.previewPessoa;
+      case 'sucesso':
+        await _controlador!.marcarTomada(
+          _controlador!.tomas.firstWhere((t) => t.id == 't2'),
+        );
+        _modo = _Modo.sucesso;
+      default:
+        _modo = _Modo.cuidador;
+    }
+    if (mounted) setState(() {});
+  }
+
   _Modo _modo = _Modo.entrar;
   HojeControlador? _controlador;
   List<Perfil> _perfis = const [];
@@ -93,22 +127,56 @@ class _AmparoAppState extends State<AmparoApp> {
     );
   }
 
+  void _aviso(BuildContext context, String texto) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
+  }
+
   Widget _corpo(BuildContext context) {
     final c = _controlador;
     switch (_modo) {
       case _Modo.entrar:
-        return EntrarEcra(aoEntrar: _entrar);
+        return EntrarEcra(
+          aoEntrar: _entrar,
+          erroInicial: widget.telaInicial == 'entrar-erro'
+              ? 'credenciais_invalidas'
+              : null,
+          aoApple: () => _aviso(
+            context,
+            'Entrar com a Apple liga-se quando a conta Apple Developer estiver configurada.',
+          ),
+          aoGoogle: () => _aviso(
+            context,
+            'Entrar com a Google liga-se quando o projeto Google estiver configurado.',
+          ),
+          aoTerCodigo: () =>
+              _aviso(context, 'O ecrã "Tenho um código" vem a seguir.'),
+          aoCriarConta: () =>
+              _aviso(context, 'O ecrã "Criar conta" vem a seguir.'),
+          aoEsquecerSenha: () =>
+              _aviso(context, 'A recuperação de palavra-passe vem a seguir.'),
+        );
+      case _Modo.sucesso:
+        return SucessoMarcadaEcra(
+          controlador: c!,
+          tomaId: 't2',
+          aoVoltar: () => setState(() => _modo = _Modo.cuidador),
+        );
       case _Modo.previewPessoa:
         return Stack(
           children: [
             IdosoHoje(controlador: c!),
             Positioned(
-              top: 8,
-              right: 8,
+              left: 20,
+              right: 20,
+              bottom: 20,
               child: SafeArea(
                 child: Botao(
                   texto: 'Sair da pré-visualização',
                   icone: Icons.close,
+                  altura: 52,
+                  fundo: context.t.superficie,
+                  cor: context.t.texto,
+                  contorno: context.t.linha,
                   aoTocar: () => setState(() => _modo = _Modo.cuidador),
                 ),
               ),

@@ -1,3 +1,4 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../dominio/modelos.dart';
@@ -6,6 +7,10 @@ import '../../tema/tema.dart';
 import '../../tema/tokens.dart';
 import '../componentes/base.dart';
 import 'cuidador_hoje.dart';
+
+/// A cápsula do design (Idoso-Hoje.dc.html).
+const _svgCapsula =
+    '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><g transform="rotate(-45 32 32)"><rect x="6" y="21" width="52" height="22" rx="11" fill="#FFFFFF" stroke="#0F172A" stroke-width="3"/><path d="M32 21h15a11 11 0 0 1 0 22H32z" fill="#2DD4BF" stroke="#0F172A" stroke-width="3" stroke-linejoin="round"/></g></svg>';
 
 /// "Hoje" no modo simples: a toma atrasada ou a próxima em destaque, botões grandes, o resto mais abaixo.
 /// É o único modo no telemóvel de uma pessoa ligada por código (e a pré-visualização "ver como a pessoa vê").
@@ -259,10 +264,14 @@ class _CartaoDestaque extends StatelessWidget {
                   color: const Color(0xFFFFFFFF),
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: const Icon(
-                  Icons.medication,
-                  size: 36,
-                  color: Color(0xFF0F766E),
+                child: Center(
+                  child: ExcludeSemantics(
+                    child: SvgPicture.string(
+                      _svgCapsula,
+                      width: 48,
+                      height: 48,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),

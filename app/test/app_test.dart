@@ -5,6 +5,7 @@ import 'package:amparo/dados/repositorio_memoria.dart';
 import 'package:amparo/tema/tokens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:lottie/lottie.dart';
 import 'package:material_ui/material_ui.dart';
 
 final agora = DateTime(2026, 11, 21, 13, 0); // sábado
@@ -13,6 +14,10 @@ Future<void> abrir(WidgetTester tester) async {
   tester.view.physicalSize = const Size(390, 1400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  // "Reduzir movimento": as animações Lottie ficam no último fotograma (e o pumpAndSettle termina).
+  tester.platformDispatcher.accessibilityFeaturesTestValue =
+      const FakeAccessibilityFeatures(disableAnimations: true);
+  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
   await tester.pumpWidget(
     AmparoApp(
       repositorio: RepositorioMemoria(agora: agora),
@@ -24,15 +29,9 @@ Future<void> abrir(WidgetTester tester) async {
 
 Future<void> entrar(WidgetTester tester) async {
   await abrir(tester);
-  await tester.enterText(
-    find.widgetWithText(TextField, 'Email'),
-    'ana@exemplo.pt',
-  );
-  await tester.enterText(
-    find.widgetWithText(TextField, 'Palavra-passe'),
-    'uma-senha-segura-123',
-  );
-  await tester.tap(find.text('Entrar'));
+  await tester.enterText(find.byType(TextField).at(0), 'ana@exemplo.pt');
+  await tester.enterText(find.byType(TextField).at(1), 'uma-senha-segura-123');
+  await tester.tap(find.widgetWithText(InkWell, 'Entrar'));
   await tester.pumpAndSettle();
 }
 
@@ -44,9 +43,31 @@ void main() {
       'mostra os dois métodos de início de sessão juntos e nenhum botão de Face ID',
       (tester) async {
         await abrir(tester);
-        expect(find.text('Continuar com a Apple'), findsOneWidget);
-        expect(find.text('Continuar com a Google'), findsOneWidget);
+        expect(find.text('ou continue com'), findsOneWidget);
+        expect(find.text('Apple'), findsOneWidget);
+        expect(find.text('Google'), findsOneWidget);
+        final semantica = tester
+            .ensureSemantics(); // os botões têm nome para o leitor de ecrã
+        await tester.pump();
+        expect(find.bySemanticsLabel('Entrar com Apple'), findsOneWidget);
+        expect(find.bySemanticsLabel('Entrar com Google'), findsOneWidget);
+        semantica.dispose();
         expect(find.textContaining('Face ID'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'tem a animação Lottie de boas-vindas, "Tenho um código" e "Criar conta", como no design',
+      (tester) async {
+        await abrir(tester);
+        expect(find.byType(LottieBuilder), findsOneWidget);
+        expect(
+          find.text('Bem-vinda de volta. Entre para ver as tomas.'),
+          findsOneWidget,
+        );
+        expect(find.text('Esqueci-me da palavra-passe'), findsOneWidget);
+        expect(find.textContaining('Tenho um código'), findsOneWidget);
+        expect(find.textContaining('Criar conta'), findsOneWidget);
       },
     );
 
@@ -54,7 +75,7 @@ void main() {
       tester,
     ) async {
       await abrir(tester);
-      await tester.tap(find.text('Entrar'));
+      await tester.tap(find.widgetWithText(InkWell, 'Entrar'));
       await tester.pumpAndSettle();
       expect(find.text('Escreva o email e a palavra-passe.'), findsOneWidget);
       expect(find.text('Hoje'), findsNothing);
@@ -90,8 +111,40 @@ void main() {
         await entrar(tester);
         await tester.tap(find.text('Marcar como tomada'));
         await tester.pumpAndSettle();
+        // aparece o ecrã de sucesso do design, com a animação, e a pessoa "vê esta marcação"
+        expect(find.text('Toma marcada'), findsOneWidget);
+        expect(find.byType(LottieBuilder), findsOneWidget);
+        expect(find.text('A Maria vê esta marcação'), findsOneWidget);
+        await tester.tap(find.text('Voltar a Hoje'));
+        await tester.pumpAndSettle();
         expect(find.text('2/4'), findsOneWidget);
         expect(find.textContaining('Marcada por Ana'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      '"Desfazer registo" no ecrã de sucesso volta a deixar a toma pendente',
+      (tester) async {
+        await entrar(tester);
+        await tester.tap(find.text('Marcar como tomada'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Desfazer registo'));
+        await tester.pumpAndSettle();
+        expect(find.text('1/4'), findsOneWidget);
+        expect(find.text('Marcar como tomada'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      '"Desfazer registo" no ecrã de sucesso volta a deixar a toma pendente',
+      (tester) async {
+        await entrar(tester);
+        await tester.tap(find.text('Marcar como tomada'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Desfazer registo'));
+        await tester.pumpAndSettle();
+        expect(find.text('1/4'), findsOneWidget);
+        expect(find.text('Marcar como tomada'), findsOneWidget);
       },
     );
 
@@ -108,10 +161,10 @@ void main() {
 
     testWidgets('a barra em ilha leva a Receitas e a Mais', (tester) async {
       await entrar(tester);
-      await tester.tap(find.bySemanticsLabel('Receitas'));
+      await tester.tap(find.byIcon(Icons.description_outlined));
       await tester.pumpAndSettle();
       expect(find.text('Medicamentos de Maria'), findsOneWidget);
-      await tester.tap(find.bySemanticsLabel('Mais'));
+      await tester.tap(find.byIcon(Icons.settings_outlined));
       await tester.pumpAndSettle();
       expect(find.text('Ver como a pessoa vê'), findsOneWidget);
     });
@@ -120,7 +173,7 @@ void main() {
   group('Modo simples (ver como a pessoa vê)', () {
     Future<void> abrirModoSimples(WidgetTester tester) async {
       await entrar(tester);
-      await tester.tap(find.bySemanticsLabel('Mais'));
+      await tester.tap(find.byIcon(Icons.settings_outlined));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Ver como a pessoa vê'));
       await tester.pumpAndSettle();
@@ -188,7 +241,9 @@ void main() {
       tester,
     ) async {
       await abrir(tester);
-      final ctx = tester.element(find.text('Amparo'));
+      final ctx = tester.element(
+        find.text('Bem-vinda de volta. Entre para ver as tomas.'),
+      );
       expect(ctx.t.escuro, isTrue);
       expect(ctx.t.primaria, const Color(0xFF2DD4BF));
     });
@@ -197,7 +252,7 @@ void main() {
       'o interruptor muda para o tema claro (verde-azulado mais escuro)',
       (tester) async {
         await entrar(tester);
-        await tester.tap(find.bySemanticsLabel('Mais'));
+        await tester.tap(find.byIcon(Icons.settings_outlined));
         await tester.pumpAndSettle();
         await tester.tap(find.byType(Switch));
         await tester.pumpAndSettle();

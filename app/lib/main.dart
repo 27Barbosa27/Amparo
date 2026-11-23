@@ -8,5 +8,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_PT');
   // Dados falsos até a app falar com a API (backend/).
-  runApp(AmparoApp(repositorio: RepositorioMemoria(agora: DateTime.now())));
+  const tela = String.fromEnvironment('TELA');
+  runApp(
+    AmparoApp(
+      repositorio: RepositorioMemoria(agora: DateTime.now()),
+      telaInicial: tela,
+    ),
+  );
 }

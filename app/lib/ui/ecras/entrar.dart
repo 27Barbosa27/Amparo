@@ -1,17 +1,35 @@
 import 'package:material_ui/material_ui.dart';
 
-import '../../tema/tema.dart';
 import '../../tema/tokens.dart';
-import '../componentes/base.dart';
+import '../componentes/animacao.dart';
+import '../componentes/sso.dart';
 
-/// Entrar (só cuidadores têm conta). Sem botão de Face ID: o iPhone já preenche as credenciais
-/// (`autofillHints` certos) e a biometria da app serve só para desbloquear ao abrir.
+/// Entrar, como no design: animação de boas-vindas, campos com rótulo por cima, "ou continue com"
+/// (Apple e Google lado a lado), "Tenho um código" e "Criar conta". Só cuidadores têm conta.
+/// Sem botão de Face ID: o iPhone já preenche as credenciais (`autofillHints`) e a biometria da app
+/// serve só para desbloquear ao abrir.
 class EntrarEcra extends StatefulWidget {
-  const EntrarEcra({super.key, required this.aoEntrar, this.aoCriarConta});
+  const EntrarEcra({
+    super.key,
+    required this.aoEntrar,
+    this.aoCriarConta,
+    this.aoTerCodigo,
+    this.aoEsquecerSenha,
+    this.aoApple,
+    this.aoGoogle,
+    this.erroInicial,
+  });
 
   /// Recebe email e palavra-passe. Devolve o código de erro estável (ver o plano) ou nulo se correu bem.
   final Future<String?> Function(String email, String senha) aoEntrar;
   final VoidCallback? aoCriarConta;
+  final VoidCallback? aoTerCodigo;
+  final VoidCallback? aoEsquecerSenha;
+  final VoidCallback? aoApple;
+  final VoidCallback? aoGoogle;
+
+  /// Para mostrar o ecrã já em estado de erro (capturas e testes).
+  final String? erroInicial;
 
   @override
   State<EntrarEcra> createState() => _EntrarEcraState();
@@ -22,7 +40,19 @@ class _EntrarEcraState extends State<EntrarEcra> {
   final _senha = TextEditingController();
   bool _aEntrar = false;
   bool _ver = false;
-  String? _erro;
+  late String? _erro = widget.erroInicial == null
+      ? null
+      : (_mensagens[widget.erroInicial] ?? _generica);
+
+  static const _generica = 'Não foi possível entrar. Tente outra vez.';
+  static const _mensagens = {
+    'credenciais_invalidas':
+        'Email ou palavra-passe incorretos. Tente outra vez.',
+    'demasiadas_tentativas':
+        'Demasiadas tentativas. Espere um pouco e tente outra vez.',
+    'sem_rede': 'Sem ligação. Verifique a internet e tente outra vez.',
+    'campos_vazios': 'Escreva o email e a palavra-passe.',
+  };
 
   @override
   void dispose() {
@@ -31,17 +61,10 @@ class _EntrarEcraState extends State<EntrarEcra> {
     super.dispose();
   }
 
-  static const _mensagens = {
-    'credenciais_invalidas': 'Email ou palavra-passe errados.',
-    'demasiadas_tentativas':
-        'Demasiadas tentativas. Espere um pouco e tente outra vez.',
-    'sem_rede': 'Sem ligação. Verifique a internet e tente outra vez.',
-  };
-
   Future<void> _submeter() async {
     final email = _email.text.trim();
     if (email.isEmpty || _senha.text.isEmpty) {
-      setState(() => _erro = 'Escreva o email e a palavra-passe.');
+      setState(() => _erro = _mensagens['campos_vazios']);
       return;
     }
     setState(() {
@@ -52,64 +75,122 @@ class _EntrarEcraState extends State<EntrarEcra> {
     if (!mounted) return;
     setState(() {
       _aEntrar = false;
-      _erro = codigo == null
-          ? null
-          : (_mensagens[codigo] ?? 'Não foi possível entrar. Tente outra vez.');
+      _erro = codigo == null ? null : (_mensagens[codigo] ?? _generica);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final t = context.t;
+    final comErro = _erro != null;
     return SafeArea(
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
             children: [
-              Semantics(
-                header: true,
-                child: Text(
-                  'Amparo',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.9,
-                    color: t.primaria,
+              Column(
+                children: [
+                  // Com erro, a animação encolhe (150x120), como no design.
+                  AnimacaoLottie(
+                    asset: 'assets/lottie/entrar.json',
+                    largura: comErro ? 150 : 200,
+                    altura: comErro ? 120 : 190,
+                    repetir: true,
+                    descricao: 'Animação de boas-vindas',
+                  ),
+                  const SizedBox(height: 10),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      'Entrar',
+                      style: TextStyle(
+                        fontSize: 22,
+                        height: 1.15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.55,
+                        color: t.texto,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Bem-vinda de volta. Entre para ver as tomas.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.45,
+                      fontWeight: FontWeight.w500,
+                      color: t.texto2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              if (comErro) ...[
+                Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: t.mauSuave,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, size: 22, color: t.mauTexto),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _erro!,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: t.mauTexto,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Entre na sua conta de cuidador',
-                style: Estilos.subtitulo(t),
-              ),
-              const SizedBox(height: 28),
+                const SizedBox(height: 14),
+              ],
               AutofillGroup(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _Campo(
-                      controlador: _email,
                       rotulo: 'Email',
+                      dica: 'nome@exemplo.pt',
+                      controlador: _email,
+                      erro: comErro,
                       teclado: TextInputType.emailAddress,
-                      dicas: const [AutofillHints.email],
+                      autofill: const [AutofillHints.email],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     _Campo(
-                      controlador: _senha,
                       rotulo: 'Palavra-passe',
+                      dica: 'Palavra-passe',
+                      controlador: _senha,
+                      erro: comErro,
                       escondido: !_ver,
-                      dicas: const [AutofillHints.password],
+                      autofill: const [AutofillHints.password],
                       aoSubmeter: _submeter,
                       sufixo: IconButton(
                         tooltip: _ver
-                            ? 'Esconder a palavra-passe'
-                            : 'Mostrar a palavra-passe',
+                            ? 'Esconder palavra-passe'
+                            : 'Mostrar palavra-passe',
                         onPressed: () => setState(() => _ver = !_ver),
                         icon: Icon(
-                          _ver ? Icons.visibility_off : Icons.visibility,
+                          _ver
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 22,
                           color: t.texto2,
                         ),
                       ),
@@ -117,78 +198,132 @@ class _EntrarEcraState extends State<EntrarEcra> {
                   ],
                 ),
               ),
-              if (_erro != null) ...[
-                const SizedBox(height: 12),
-                Semantics(
-                  liveRegion: true,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: t.mauSuave,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      _erro!,
-                      style: Estilos.corpo(
-                        t,
-                        peso: FontWeight.w700,
-                        cor: t.mauTexto,
+              Align(
+                alignment: Alignment.centerRight,
+                child: InkWell(
+                  onTap: widget.aoEsquecerSenha,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 32),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      widthFactor: 1,
+                      child: Text(
+                        'Esqueci-me da palavra-passe',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: t.primaria,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ],
-              const SizedBox(height: 20),
-              Botao(
-                texto: _aEntrar ? 'A entrar…' : 'Entrar',
-                altura: 56,
-                raio: 18,
-                tamanhoTexto: 17,
-                aoTocar: _aEntrar ? null : _submeter,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 6),
+              Semantics(
+                button: true,
+                label: 'Entrar',
+                excludeSemantics: true,
+                child: Material(
+                  color: t.primaria,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _aEntrar ? null : _submeter,
+                    child: SizedBox(
+                      height: 56,
+                      child: Center(
+                        child: Text(
+                          _aEntrar ? 'A entrar…' : 'Entrar',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: t.sobrePrimaria,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
               Row(
                 children: [
-                  Expanded(child: Divider(color: t.linha)),
+                  Expanded(child: Container(height: 1, color: t.linha)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('ou', style: Estilos.subtitulo(t)),
+                    child: Text(
+                      'ou continue com',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: t.texto2,
+                      ),
+                    ),
                   ),
-                  Expanded(child: Divider(color: t.linha)),
+                  Expanded(child: Container(height: 1, color: t.linha)),
                 ],
               ),
-              const SizedBox(height: 20),
-              // O "Entrar com a Apple" e com a Google aparecem sempre juntos (regra da Apple). Ligam-se quando houver as contas.
-              Botao(
-                texto: 'Continuar com a Apple',
-                icone: Icons.apple,
-                altura: 52,
-                raio: 18,
-                fundo: t.superficie,
-                cor: t.texto,
-                aoTocar: null,
+              const SizedBox(height: 14),
+              BotoesSso(
+                aoApple: widget.aoApple ?? () {},
+                aoGoogle: widget.aoGoogle ?? () {},
               ),
-              const SizedBox(height: 10),
-              Botao(
-                texto: 'Continuar com a Google',
-                icone: Icons.g_mobiledata,
-                altura: 52,
-                raio: 18,
-                fundo: t.superficie,
-                cor: t.texto,
-                aoTocar: null,
+              const SizedBox(height: 22),
+              InkWell(
+                onTap: widget.aoTerCodigo,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  child: Center(
+                    child: Text.rich(
+                      TextSpan(
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: t.texto2,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Telemóvel de alguém? '),
+                          TextSpan(
+                            text: 'Tenho um código',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: t.primaria,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 8),
               Center(
-                child: TextButton(
-                  onPressed: widget.aoCriarConta,
-                  child: Text(
-                    'Criar conta de cuidador',
+                child: Text.rich(
+                  TextSpan(
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: t.primaria,
+                      fontWeight: FontWeight.w500,
+                      color: t.texto2,
                     ),
+                    children: [
+                      const TextSpan(text: 'Ainda não tem conta? '),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.baseline,
+                        baseline: TextBaseline.alphabetic,
+                        child: InkWell(
+                          onTap: widget.aoCriarConta,
+                          child: Text(
+                            'Criar conta',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: t.primaria,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -202,61 +337,83 @@ class _EntrarEcraState extends State<EntrarEcra> {
 
 class _Campo extends StatelessWidget {
   const _Campo({
-    required this.controlador,
     required this.rotulo,
+    required this.dica,
+    required this.controlador,
+    required this.erro,
     this.teclado,
     this.escondido = false,
-    this.dicas,
+    this.autofill,
     this.sufixo,
     this.aoSubmeter,
   });
-  final TextEditingController controlador;
   final String rotulo;
+  final String dica;
+  final TextEditingController controlador;
+  final bool erro;
   final TextInputType? teclado;
   final bool escondido;
-  final Iterable<String>? dicas;
+  final Iterable<String>? autofill;
   final Widget? sufixo;
   final VoidCallback? aoSubmeter;
 
   @override
   Widget build(BuildContext context) {
     final t = context.t;
-    return TextField(
-      controller: controlador,
-      keyboardType: teclado,
-      obscureText: escondido,
-      autofillHints: dicas,
-      autocorrect: false,
-      enableSuggestions: false,
-      onSubmitted: aoSubmeter == null ? null : (_) => aoSubmeter!(),
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: t.texto,
-      ),
-      decoration: InputDecoration(
-        labelText: rotulo,
-        labelStyle: TextStyle(color: t.texto2),
-        filled: true,
-        fillColor: t.superficie,
-        suffixIcon: sufixo,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
+    final cor = erro ? t.mau : t.linha;
+    OutlineInputBorder borda(Color c) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: c, width: 2),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          rotulo,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: t.texto,
+          ),
         ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: t.linha),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 52,
+          child: TextField(
+            controller: controlador,
+            keyboardType: teclado,
+            obscureText: escondido,
+            autofillHints: autofill,
+            autocorrect: false,
+            enableSuggestions: false,
+            onSubmitted: aoSubmeter == null ? null : (_) => aoSubmeter!(),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: t.texto,
+            ),
+            decoration: InputDecoration(
+              hintText: dica,
+              hintStyle: TextStyle(
+                color: t.texto2.withValues(alpha: .85),
+                fontWeight: FontWeight.w600,
+              ),
+              filled: true,
+              fillColor: t.superficie,
+              suffixIcon: sufixo,
+              contentPadding: EdgeInsets.fromLTRB(
+                16,
+                0,
+                sufixo == null ? 16 : 4,
+                0,
+              ),
+              border: borda(cor),
+              enabledBorder: borda(cor),
+              focusedBorder: borda(erro ? t.mau : t.primaria),
+            ),
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: t.linha),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: t.primaria, width: 2),
-        ),
-      ),
+      ],
     );
   }
 }
