@@ -82,6 +82,8 @@ O script cria um PostgreSQL descartável, restaura lá o backup e verifica as ta
 
 - A API corre como utilizador `node`, com sistema de ficheiros só de leitura, sem capacidades Linux e sem novos privilégios.
 - A base de dados não tem portas publicadas: só a API a alcança, na rede interna.
+- A API liga-se com `amparo_runtime` (papel `amparo_app`), **não** com o dono da base de dados: não tem permissão para alterar, apagar nem esvaziar o `audit_logs` (`REVOKE`, além do trigger), nem para tocar no histórico de migrações. O utilizador é criado pela migração `…05_papel-app-login` a partir de `APP_DB_PASSWORD`. Testado: a suite completa passa ligada com este papel (as 2 exceções são os testes que sondam o trigger a partir do dono).
+- O código de ligação tem limite por IP e um limite global de falhas contra ataques com muitos IPs.
 - O Caddy limita o tamanho dos corpos (200 KB), escreve o IP real em `X-Forwarded-For` (a API confia só nesse proxy) e põe HSTS.
 - Limite global de pedidos por IP em produção, além dos limites apertados do login e da ligação por código.
 - O CI corre migrações, tipos, testes, build, `npm audit` (só falha com vulnerabilidades altas ou críticas) e constrói a imagem.
