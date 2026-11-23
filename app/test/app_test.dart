@@ -104,8 +104,15 @@ void main() {
       expect(find.text('83% de adesão'), findsOneWidget);
       expect(find.text('08:00 · Metformina e Vitamina D'), findsOneWidget);
       expect(find.text('Tomadas às 08:12'), findsOneWidget);
-      expect(find.text('09:00 · Lisinopril 10 mg'), findsOneWidget);
-      expect(find.text('Por confirmar'), findsWidgets);
+      // a toma atrasada: hora em destaque, medicamento, dose e o estado "Atrasada há 4 h"
+      expect(find.text('09:00'), findsOneWidget);
+      expect(find.text('Lisinopril'), findsOneWidget);
+      expect(find.text('10 mg · de manhã'), findsOneWidget);
+      expect(find.text('Atrasada há 4 h'), findsOneWidget);
+      // a próxima toma (13:00): estado "Agora" e os dois botões compactos
+      expect(find.text('Agora'), findsOneWidget);
+      expect(find.text('Tomada'), findsNWidgets(2));
+      expect(find.text('Saltar'), findsNWidgets(2));
       expect(find.text('21:00 · Atorvastatina 20 mg'), findsOneWidget);
     });
 
@@ -113,7 +120,7 @@ void main() {
       'marcar a toma atrasada como tomada atualiza o resumo e diz quem a marcou',
       (tester) async {
         await entrar(tester);
-        await tester.tap(find.text('Marcar como tomada'));
+        await tester.tap(find.text('Tomada').first);
         await tester.pumpAndSettle();
         // aparece o ecrã de sucesso do design, com a animação, e a pessoa "vê esta marcação"
         expect(find.text('Toma marcada'), findsOneWidget);
@@ -130,12 +137,15 @@ void main() {
       '"Desfazer registo" no ecrã de sucesso volta a deixar a toma pendente',
       (tester) async {
         await entrar(tester);
-        await tester.tap(find.text('Marcar como tomada'));
+        await tester.tap(find.text('Tomada').first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Desfazer registo'));
         await tester.pumpAndSettle();
         expect(find.text('1/4'), findsOneWidget);
-        expect(find.text('Marcar como tomada'), findsOneWidget);
+        expect(
+          find.text('Tomada'),
+          findsNWidgets(2),
+        ); // a toma voltou a pendente
       },
     );
 
@@ -143,12 +153,15 @@ void main() {
       '"Desfazer registo" no ecrã de sucesso volta a deixar a toma pendente',
       (tester) async {
         await entrar(tester);
-        await tester.tap(find.text('Marcar como tomada'));
+        await tester.tap(find.text('Tomada').first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Desfazer registo'));
         await tester.pumpAndSettle();
         expect(find.text('1/4'), findsOneWidget);
-        expect(find.text('Marcar como tomada'), findsOneWidget);
+        expect(
+          find.text('Tomada'),
+          findsNWidgets(2),
+        ); // a toma voltou a pendente
       },
     );
 
@@ -159,8 +172,8 @@ void main() {
       expect(find.text('Quem vai acompanhar?'), findsOneWidget);
       await tester.tap(find.text('Manuel'));
       await tester.pumpAndSettle();
-      expect(find.text('10:00 · Ramipril 5 mg'), findsOneWidget);
-      expect(find.text('09:00 · Lisinopril 10 mg'), findsNothing);
+      expect(find.text('Ramipril'), findsOneWidget);
+      expect(find.text('Lisinopril'), findsNothing);
     });
 
     testWidgets('a barra em ilha leva a Receitas e a Mais', (tester) async {

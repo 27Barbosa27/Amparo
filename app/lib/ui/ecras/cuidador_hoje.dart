@@ -525,26 +525,25 @@ class _ItemTempo extends StatelessWidget {
         icone: Icons.priority_high,
         corIcone: Tokens.sobreAviso,
       );
-      cartao = Cartao(
-        raio: 20,
-        cor: t.avisoSuave,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              titulo,
-              style: Estilos.corpo(t, peso: FontWeight.w700, cor: t.avisoTexto),
-            ),
-            Text('Por confirmar', style: Estilos.corpo(t, cor: t.avisoTexto)),
-            const SizedBox(height: 10),
-            Botao(
-              texto: 'Marcar como tomada',
-              icone: Icons.check,
-              aoTocar: () => _marcar(context),
-            ),
-          ],
+      final atraso = agora.difference(toma.agendada);
+      final ha = atraso.inMinutes >= 120
+          ? '${atraso.inHours} h'
+          : '${atraso.inMinutes} min';
+      cartao = _CartaoAcao(
+        toma: toma,
+        fundo: t.avisoSuave,
+        corTitulo: t.texto,
+        corSubtitulo: t.avisoTexto,
+        estado: _EstadoToma(
+          texto: 'Atrasada há $ha',
+          icone: Icons.priority_high,
+          fundo: t.aviso,
+          cor: Tokens.sobreAviso,
         ),
+        corSecundario: t.avisoTexto,
+        fundoSecundario: t.aviso.withValues(alpha: .22),
+        aoTomar: () => _marcar(context),
+        aoSaltar: () => controlador.saltar(toma),
       );
     } else if (proxima) {
       selo = Selo(
@@ -553,88 +552,21 @@ class _ItemTempo extends StatelessWidget {
         corIcone: t.sobrePrimaria,
       );
       final min = toma.agendada.difference(agora).inMinutes;
-      cartao = Cartao(
-        raio: 20,
-        cor: t.heroi,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${horaCurta(toma.agendada)} · ${toma.medicamento}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: t.sobreHeroi,
-                        ),
-                      ),
-                      if (toma.dose.isNotEmpty || toma.nota != null)
-                        Text(
-                          [
-                            if (toma.dose.isNotEmpty) toma.dose,
-                            if (toma.nota != null) toma.nota!,
-                          ].join(' · '),
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: t.sobreHeroi2,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: t.primariaSuave,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Text(
-                    min <= 0 ? 'Agora' : '$min min',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: t.sobrePrimariaSuave,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Botao(
-                    texto: 'Marcar tomada',
-                    icone: Icons.check,
-                    fundo: const Color(0xFFFFFFFF),
-                    cor: const Color(0xFF0B3B37),
-                    aoTocar: () => _marcar(context),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Botao(
-                    texto: 'Saltar',
-                    fundo: const Color(0x14FFFFFF),
-                    cor: t.sobreHeroi,
-                    contorno: const Color(0xB3FFFFFF),
-                    aoTocar: () => controlador.saltar(toma),
-                  ),
-                ),
-              ],
-            ),
-          ],
+      cartao = _CartaoAcao(
+        toma: toma,
+        fundo: t.heroi,
+        corTitulo: t.sobreHeroi,
+        corSubtitulo: t.sobreHeroi2,
+        estado: _EstadoToma(
+          texto: min <= 0 ? 'Agora' : 'Em $min min',
+          icone: Icons.schedule,
+          fundo: t.primariaSuave,
+          cor: t.sobrePrimariaSuave,
         ),
+        corSecundario: t.sobreHeroi,
+        fundoSecundario: const Color(0x1FFFFFFF),
+        aoTomar: () => _marcar(context),
+        aoSaltar: () => controlador.saltar(toma),
       );
     } else {
       selo = Selo(
@@ -695,7 +627,7 @@ class _CartaoSimples extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.t;
     return Cartao(
-      raio: 20,
+      raio: _raioCartaoToma,
       cor: fundo,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: SizedBox(
@@ -706,6 +638,218 @@ class _CartaoSimples extends StatelessWidget {
             Text(titulo, style: Estilos.corpo(t, peso: FontWeight.w700)),
             Text(linha, style: Estilos.corpo(t, cor: corLinha)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Cantos dos cartões da linha do tempo (menos arredondados do que os 20 do resto da app).
+const _raioCartaoToma = 12.0;
+
+class _EstadoToma {
+  const _EstadoToma({
+    required this.texto,
+    required this.icone,
+    required this.fundo,
+    required this.cor,
+  });
+  final String texto;
+  final IconData icone;
+  final Color fundo;
+  final Color cor;
+}
+
+/// O cartão de uma toma que pede ação (a próxima ou a atrasada): a hora em destaque, o nome do medicamento,
+/// o estado à direita e dois botões compactos, "Tomada" e "Saltar".
+class _CartaoAcao extends StatelessWidget {
+  const _CartaoAcao({
+    required this.toma,
+    required this.fundo,
+    required this.corTitulo,
+    required this.corSubtitulo,
+    required this.estado,
+    required this.corSecundario,
+    required this.fundoSecundario,
+    required this.aoTomar,
+    required this.aoSaltar,
+  });
+  final Toma toma;
+  final Color fundo;
+  final Color corTitulo;
+  final Color corSubtitulo;
+  final _EstadoToma estado;
+  final Color corSecundario;
+  final Color fundoSecundario;
+  final VoidCallback aoTomar;
+  final VoidCallback aoSaltar;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    final detalhe = [
+      if (toma.dose.isNotEmpty) toma.dose,
+      if (toma.nota != null) toma.nota!,
+    ].join(' · ');
+    return Cartao(
+      raio: _raioCartaoToma,
+      cor: fundo,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                horaCurta(toma.agendada),
+                style: TextStyle(
+                  fontSize: 20,
+                  height: 1.1,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                  color: corTitulo,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      toma.medicamento,
+                      style: TextStyle(
+                        fontSize: 16,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                        color: corTitulo,
+                      ),
+                    ),
+                    if (detalhe.isNotEmpty)
+                      Text(
+                        detalhe,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.3,
+                          fontWeight: FontWeight.w500,
+                          color: corSubtitulo,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: estado.fundo,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(estado.icone, size: 14, color: estado.cor),
+                  const SizedBox(width: 4),
+                  Text(
+                    estado.texto,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: estado.cor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: _BotaoToma(
+                  texto: 'Tomada',
+                  descricao: 'Marcar ${toma.medicamento} como tomada',
+                  icone: Icons.check,
+                  fundo: t.primaria,
+                  cor: t.sobrePrimaria,
+                  aoTocar: aoTomar,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: _BotaoToma(
+                  texto: 'Saltar',
+                  descricao: 'Saltar a toma de ${toma.medicamento}',
+                  fundo: fundoSecundario,
+                  cor: corSecundario,
+                  aoTocar: aoSaltar,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Botão compacto (44 px de altura, cantos de 10) dos cartões de toma.
+class _BotaoToma extends StatelessWidget {
+  const _BotaoToma({
+    required this.texto,
+    required this.descricao,
+    required this.fundo,
+    required this.cor,
+    required this.aoTocar,
+    this.icone,
+  });
+  final String texto;
+  final String descricao;
+  final Color fundo;
+  final Color cor;
+  final VoidCallback aoTocar;
+  final IconData? icone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: descricao,
+      excludeSemantics: true,
+      child: Material(
+        color: fundo,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: aoTocar,
+          child: SizedBox(
+            height: 44,
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icone != null) ...[
+                    Icon(icone, size: 18, color: cor),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    texto,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: cor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
