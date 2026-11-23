@@ -1,5 +1,7 @@
 import 'package:amparo/dados/repositorio.dart';
-import 'package:amparo/dados/repositorio_memoria.dart';
+
+import 'apoio/repositorio_memoria.dart';
+
 import 'package:amparo/dominio/modelos.dart';
 import 'package:flutter_test/flutter_test.dart';
 

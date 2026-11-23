@@ -1,7 +1,7 @@
 import '../dominio/modelos.dart';
 
-/// A fronteira entre a app e os dados. Há a versão com dados falsos ([RepositorioMemoria]) e a que
-/// fala com a API ([RepositorioApi]); os ecrãs não sabem qual é.
+/// A fronteira entre a app e os dados. Só há uma versão em produção ([RepositorioApi]); os testes
+/// usam uma versão falsa que vive em `test/`.
 abstract class Repositorio {
   Future<List<Perfil>> perfis();
 

@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:amparo/app.dart';
-import 'package:amparo/dados/autenticacao.dart';
-import 'package:amparo/dados/repositorio_memoria.dart';
+
+import 'apoio/autenticacao_memoria.dart';
+import 'apoio/repositorio_memoria.dart';
+
 import 'package:amparo/tema/tokens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';

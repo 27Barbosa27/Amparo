@@ -16,8 +16,7 @@
     "db:up": "podman compose up -d db",
     "db:down": "podman compose down",
     "migrate": "node --env-file=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m migrations",
-    "migrate:down": "node --env-file=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down -m migrations",
-    "seed:dev": "tsx scripts/semear-dev.ts"
+    "migrate:down": "node --env-file=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down -m migrations"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",

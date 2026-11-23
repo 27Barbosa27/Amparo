@@ -1,9 +1,8 @@
-import '../dominio/modelos.dart';
-import 'corpo_receita.dart';
-import 'repositorio.dart';
+import 'package:amparo/dados/corpo_receita.dart';
+import 'package:amparo/dados/repositorio.dart';
+import 'package:amparo/dominio/modelos.dart';
 
-/// Dados falsos, tirados do design (Maria, Lisinopril, Metformina...), para desenvolver e testar os ecrãs
-/// sem servidor. As horas são relativas ao "agora" com que é criado, por isso o dia faz sempre sentido.
+/// Repositório falso, SÓ PARA OS TESTES (os dados de exemplo ficam aqui, nunca na app). As horas são relativas ao "agora" com que é criado, por isso o dia faz sempre sentido.
 class RepositorioMemoria implements Repositorio {
   // `vazio` não pode ser `this._vazio`: um parâmetro nomeado não pode começar por "_".
   RepositorioMemoria({required DateTime agora, bool vazio = false})

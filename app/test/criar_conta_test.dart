@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'package:amparo/app.dart';
 import 'package:amparo/dados/api.dart';
 import 'package:amparo/dados/autenticacao.dart';
-import 'package:amparo/dados/repositorio_memoria.dart';
+
+import 'apoio/autenticacao_memoria.dart';
+import 'apoio/repositorio_memoria.dart';
+
 import 'package:amparo/ui/ecras/criar_conta.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;

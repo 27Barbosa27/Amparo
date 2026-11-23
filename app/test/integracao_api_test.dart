@@ -1,7 +1,8 @@
-// Teste de integração contra a API VERDADEIRA (não é simulada).
-//   1. noutro terminal, em backend/:   npm run dev    e depois    npm run seed:dev
+// Teste de integração contra a API VERDADEIRA (não é simulada). Não usa dados prontos: cada teste cria a sua
+// própria conta, as suas pessoas e receitas, e apaga tudo no fim.
+//   1. noutro terminal, em backend/:   npm run dev
 //   2. em app/:  flutter test --dart-define=API_REAL=http://127.0.0.1:3000 test/integracao_api_test.dart
-// Sem API_REAL, estes testes ficam de fora. Mexe nos dados de demonstração (marca uma toma e desfaz).
+// Sem API_REAL, estes testes ficam de fora.
 import 'package:amparo/dados/api.dart';
 import 'package:amparo/dados/autenticacao.dart';
 import 'package:amparo/dados/repositorio.dart';
@@ -10,6 +11,74 @@ import 'package:amparo/dominio/modelos.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const apiReal = String.fromEnvironment('API_REAL');
+const senha = 'palavra-passe-de-teste-1';
+
+/// Uma conta de teste, criada de raiz e apagada no fim.
+class Conta {
+  Conta._(this.email, this.api)
+    : auth = AutenticacaoApi(api),
+      repo = RepositorioApi(api);
+
+  final String email;
+  final ClienteApi api;
+  final AutenticacaoApi auth;
+  final RepositorioApi repo;
+
+  static int _n = 0;
+
+  static ClienteApi _novoCliente() =>
+      ClienteApi(base: Uri.parse(apiReal), sessao: SessaoMemoria());
+
+  static Future<Conta> criar() async {
+    final email =
+        'integracao.${DateTime.now().microsecondsSinceEpoch}.${_n++}@amparo.test';
+    final c = Conta._(email, _novoCliente());
+    final erro = await c.auth.registar('Rui', email, senha);
+    expect(erro, isNull, reason: 'não foi possível criar a conta de teste');
+    return c;
+  }
+
+  /// Entra com as mesmas credenciais, num cliente novo (sem sessão).
+  Future<String?> entrarDeNovo() =>
+      AutenticacaoApi(_novoCliente()).entrar(email, senha);
+
+  Future<void> apagar() async {
+    // Apaga a conta e as pessoas que só ela tinha (o servidor trata disso).
+    await api.pedir('DELETE', '/auth/me', corpo: {'senha': senha});
+  }
+}
+
+NovaPessoa pessoa(String nome) => NovaPessoa(
+  nome: nome,
+  alarmesEm: AlarmesEm.pessoa,
+  tamanhoTexto: TamanhoTexto.grande,
+);
+
+/// Uma receita "de 8 em 8 horas" que começa daqui a poucos minutos, para haver tomas já.
+NovaReceita receitaJa(DateTime agora) {
+  final t = agora.add(const Duration(minutes: 2));
+  return NovaReceita(
+    medicamento: 'Ramipril 5 mg',
+    dose: '1 comprimido',
+    frequencia: Frequencia.cadaOitoHoras,
+    hora: t.hour,
+    minuto: t.minute,
+    duracao: Duracao.seteDias,
+  );
+}
+
+Future<EstadoGeracao> esperarGeracao(
+  Repositorio repo,
+  String perfilId,
+  String receitaId,
+) async {
+  var e = await repo.estadoGeracao(perfilId, receitaId);
+  for (var i = 0; i < 40 && e.fase == FaseGeracao.aGerar; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    e = await repo.estadoGeracao(perfilId, receitaId);
+  }
+  return e;
+}
 
 void main() {
   final saltar = apiReal.isEmpty
@@ -17,67 +86,88 @@ void main() {
       : null;
 
   group('Contra a API verdadeira', skip: saltar, () {
-    late ClienteApi api;
-    late AutenticacaoApi auth;
-    late RepositorioApi repo;
-    late Perfil maria;
+    late Conta c;
+    setUp(() async => c = await Conta.criar());
+    tearDown(() async => c.apagar());
 
-    setUp(() async {
-      api = ClienteApi(base: Uri.parse(apiReal), sessao: SessaoMemoria());
-      auth = AutenticacaoApi(api);
-      repo = RepositorioApi(api);
+    test('uma conta nova entra com as credenciais, começa sem ninguém e recusa o mesmo email e senhas curtas', () async {
+      expect(c.auth.nome, 'Rui');
+      expect(await c.repo.perfis(), isEmpty);
+      expect(await c.entrarDeNovo(), isNull);
+      final outra = AutenticacaoApi(Conta._novoCliente());
+      expect(
+        await outra.entrar(c.email, 'errada-errada-1'),
+        'credenciais_invalidas',
+      );
+      expect(await outra.registar('Rui', c.email, senha), 'email_ja_existe');
+      expect(
+        await outra.registar('Rui', 'curta.${c.email}', 'curta'),
+        'pedido_invalido',
+      );
     });
 
-    test(
-      'credenciais erradas dão o código estável; as certas entram',
-      () async {
-        expect(
-          await auth.entrar('demo@amparo.test', 'errada-errada-1'),
-          'credenciais_invalidas',
-        );
-        expect(
-          await auth.entrar('demo@amparo.test', 'amparo-demo-123'),
-          isNull,
-        );
-        expect(auth.nome, 'Ana');
-      },
-    );
+    test('apagar a conta faz com que deixe de entrar', () async {
+      final outra = await Conta.criar();
+      expect(await outra.entrarDeNovo(), isNull);
+      await outra.apagar();
+      expect(await outra.entrarDeNovo(), 'credenciais_invalidas');
+    });
 
-    test('lê os perfis, as tomas de hoje, a adesão e o contacto', () async {
-      await auth.entrar('demo@amparo.test', 'amparo-demo-123');
-      final perfis = await repo.perfis();
-      maria = perfis.firstWhere((p) => p.nome == 'Maria');
+    test('adicionar pessoa e receita: as tomas geram-se em segundo plano e a lista reflete-o', () async {
       final agora = DateTime.now();
-      final tomas = await repo.tomasDeHoje(maria.id, agora);
+      final p = await c.repo.criarPessoa(pessoa('Teste'));
+      expect((await c.repo.perfis()).map((x) => x.id), [p.id]);
+
+      final r = await c.repo.criarReceita(p.id, receitaJa(agora), agora);
+      final e = await esperarGeracao(c.repo, p.id, r.id);
+      expect(e.fase, FaseGeracao.concluida);
       expect(
-        tomas.map((t) => t.medicamento),
-        containsAll(['Metformina', 'Lisinopril', 'Atorvastatina']),
-      );
-      expect(tomas.every((t) => t.dose.isNotEmpty), isTrue);
-      final semana = await repo.ultimos7Dias(maria.id, agora);
-      expect(semana, hasLength(7));
-      expect(semana.last.resultado, ResultadoDia.emCurso);
-      expect(await repo.nomeDoCuidador(maria.id), 'Ana');
+        e.tomasGeradas,
+        inInclusiveRange(18, 22),
+      ); // 3 por dia durante 7 dias
+
+      final lista = await c.repo.receitas(p.id);
+      expect(lista.single.medicamento, 'Ramipril 5 mg');
+      expect(lista.single.horario, 'De 8 em 8 horas');
+      expect(
+        lista.single.diasRestantes,
+        isNull,
+      ); // sem unidades iniciais, não há stock a calcular
     });
 
     test(
       'marcar, repetir (409), desfazer e saltar funcionam de ponta a ponta',
       () async {
-        await auth.entrar('demo@amparo.test', 'amparo-demo-123');
-        maria = (await repo.perfis()).firstWhere((p) => p.nome == 'Maria');
         final agora = DateTime.now();
-        final pendente = (await repo.tomasDeHoje(
-          maria.id,
-          agora,
-        )).firstWhere((t) => t.estado == EstadoToma.pendente);
+        final p = await c.repo.criarPessoa(pessoa('Teste'));
+        final r = await c.repo.criarReceita(p.id, receitaJa(agora), agora);
+        await esperarGeracao(c.repo, p.id, r.id);
 
-        final tomada = await repo.marcarTomada(maria.id, pendente.id, agora);
+        // a primeira toma, em qualquer dia (a hora escolhida pode já ser a de amanhã)
+        final j = await c.api.pedir(
+          'GET',
+          '/tomas',
+          perfilId: p.id,
+          query: {
+            'de': agora
+                .subtract(const Duration(hours: 1))
+                .toUtc()
+                .toIso8601String(),
+            'ate': agora
+                .add(const Duration(hours: 48))
+                .toUtc()
+                .toIso8601String(),
+          },
+        );
+        final tomaId = ((j!['tomas'] as List).first as Map)['id'] as String;
+
+        final tomada = await c.repo.marcarTomada(p.id, tomaId, agora);
         expect(tomada.estado, EstadoToma.tomada);
-        expect(tomada.registadaPor, 'Ana'); // o servidor diz quem a marcou
+        expect(tomada.registadaPor, 'Rui'); // o servidor diz quem a marcou
         expect(tomada.podeDesfazer(DateTime.now()), isTrue);
 
         await expectLater(
-          repo.marcarTomada(maria.id, pendente.id, agora),
+          c.repo.marcarTomada(p.id, tomaId, agora),
           throwsA(
             isA<RegistoNaoPermitido>().having(
               (e) => e.motivo,
@@ -86,185 +176,92 @@ void main() {
             ),
           ),
         );
-
-        final volta = await repo.desfazer(
-          maria.id,
-          pendente.id,
-          DateTime.now(),
-        );
-        expect(volta.estado, EstadoToma.pendente);
-
-        final saltada = await repo.saltar(
-          maria.id,
-          pendente.id,
-          DateTime.now(),
-        );
-        expect(saltada.estado, EstadoToma.saltada);
         expect(
-          (await repo.desfazer(maria.id, pendente.id, DateTime.now())).estado,
+          (await c.repo.desfazer(p.id, tomaId, DateTime.now())).estado,
           EstadoToma.pendente,
+        );
+        expect(
+          (await c.repo.saltar(p.id, tomaId, DateTime.now())).estado,
+          EstadoToma.saltada,
+        );
+        expect(
+          (await c.repo.desfazer(p.id, tomaId, DateTime.now())).estado,
+          EstadoToma.pendente,
+        );
+
+        // uma hora no futuro é recusada
+        await expectLater(
+          c.repo.marcarTomada(
+            p.id,
+            tomaId,
+            DateTime.now(),
+            hora: DateTime.now().add(const Duration(hours: 3)),
+          ),
+          throwsA(
+            isA<RegistoNaoPermitido>().having(
+              (e) => e.motivo,
+              'motivo',
+              'hora_invalida',
+            ),
+          ),
         );
       },
     );
 
-    test('uma hora no futuro é recusada pelo servidor', () async {
-      await auth.entrar('demo@amparo.test', 'amparo-demo-123');
-      maria = (await repo.perfis()).firstWhere((p) => p.nome == 'Maria');
-      final pendente = (await repo.tomasDeHoje(
-        maria.id,
-        DateTime.now(),
-      )).firstWhere((t) => t.estado == EstadoToma.pendente);
-      await expectLater(
-        repo.marcarTomada(
-          maria.id,
-          pendente.id,
-          DateTime.now(),
-          hora: DateTime.now().add(const Duration(hours: 3)),
-        ),
-        throwsA(
-          isA<RegistoNaoPermitido>().having(
-            (e) => e.motivo,
-            'motivo',
-            'hora_invalida',
-          ),
-        ),
-      );
-    });
+    test(
+      'cada conta só vê as suas pessoas: a de outra responde como inexistente',
+      () async {
+        final p = await c.repo.criarPessoa(pessoa('Só da primeira'));
+        final outra = await Conta.criar();
+        try {
+          expect(await outra.repo.perfis(), isEmpty);
+          await expectLater(
+            outra.repo.tomasDeHoje(p.id, DateTime.now()),
+            throwsA(
+              isA<ErroApi>().having(
+                (e) => e.codigo,
+                'codigo',
+                'perfil_nao_encontrado',
+              ),
+            ),
+          );
+          await expectLater(
+            outra.repo.receitas(p.id),
+            throwsA(
+              isA<ErroApi>().having(
+                (e) => e.codigo,
+                'codigo',
+                'perfil_nao_encontrado',
+              ),
+            ),
+          );
+        } finally {
+          await outra.apagar();
+        }
+      },
+    );
 
-    test('um perfil que não é meu responde como inexistente, e sem sessão não se entra', () async {
-      await auth.entrar('demo@amparo.test', 'amparo-demo-123');
+    test('sem sessão não se lê nada; depois de sair, também não', () async {
+      await c.auth.sair();
       await expectLater(
-        repo.tomasDeHoje(
-          '11111111-1111-4111-8111-111111111111',
-          DateTime.now(),
-        ),
-        throwsA(
-          isA<ErroApi>().having(
-            (e) => e.codigo,
-            'codigo',
-            'perfil_nao_encontrado',
-          ),
-        ),
-      );
-      await auth.sair();
-      await expectLater(
-        repo.perfis(),
+        c.repo.perfis(),
         throwsA(
           isA<ErroApi>().having((e) => e.codigo, 'codigo', 'nao_autenticado'),
         ),
       );
+      // volta a entrar para o tearDown conseguir apagar a conta
+      expect(await c.auth.entrar(c.email, senha), isNull);
     });
-
-    test('adicionar pessoa e receita de ponta a ponta (gera as tomas em segundo plano) e apagar no fim', () async {
-      await auth.entrar('demo@amparo.test', 'amparo-demo-123');
-      final agora = DateTime.now();
-      final pessoa = await repo.criarPessoa(
-        NovaPessoa(
-          nome: 'Teste ${agora.millisecondsSinceEpoch}',
-          alarmesEm: AlarmesEm.pessoa,
-          tamanhoTexto: TamanhoTexto.grande,
-        ),
-      );
-      try {
-        expect((await repo.perfis()).map((p) => p.id), contains(pessoa.id));
-        final nova = NovaReceita(
-          medicamento: 'Ramipril 5 mg',
-          dose: '1 comprimido',
-          frequencia: Frequencia.duasVezesDia,
-          hora: 8,
-          minuto: 0,
-          duracao: Duracao.seteDias,
-        );
-        final r = await repo.criarReceita(pessoa.id, nova, agora);
-        var e = await repo.estadoGeracao(pessoa.id, r.id);
-        for (var i = 0; i < 40 && e.fase == FaseGeracao.aGerar; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 250));
-          e = await repo.estadoGeracao(pessoa.id, r.id);
-        }
-        expect(e.fase, FaseGeracao.concluida);
-        expect(e.tomasGeradas, inInclusiveRange(13, 15)); // 2 por dia, 7 dias
-        final lista = await repo.receitas(pessoa.id);
-        expect(lista.single.medicamento, 'Ramipril 5 mg');
-        expect(lista.single.horario, '08:00, 20:00');
-      } finally {
-        // não deixar lixo nos dados de demonstração
-        await api.pedir('DELETE', '/profiles/${pessoa.id}');
-      }
-      expect(
-        (await repo.perfis()).map((p) => p.id),
-        isNot(contains(pessoa.id)),
-      );
-    });
-
-    test(
-      'criar conta: começa vazia, recusa email repetido e apaga-se no fim',
-      () async {
-        final email =
-            'registo.${DateTime.now().millisecondsSinceEpoch}@amparo.test';
-        final novaApi = ClienteApi(
-          base: Uri.parse(apiReal),
-          sessao: SessaoMemoria(),
-        );
-        final nova = AutenticacaoApi(novaApi);
-        expect(
-          await nova.registar('Rui', email, 'palavra-passe-de-teste-1'),
-          isNull,
-        );
-        try {
-          expect(nova.nome, 'Rui');
-          expect(
-            await RepositorioApi(novaApi).perfis(),
-            isEmpty,
-          ); // conta nova: ninguém para acompanhar
-          // o mesmo email outra vez
-          final outra = AutenticacaoApi(
-            ClienteApi(base: Uri.parse(apiReal), sessao: SessaoMemoria()),
-          );
-          expect(
-            await outra.registar('Rui', email, 'palavra-passe-de-teste-1'),
-            'email_ja_existe',
-          );
-          // palavra-passe curta é recusada pelo servidor
-          expect(
-            await outra.registar('Rui', 'curta.$email', 'curta'),
-            'pedido_invalido',
-          );
-          // e a conta nova entra com as credenciais
-          final entrada = AutenticacaoApi(
-            ClienteApi(base: Uri.parse(apiReal), sessao: SessaoMemoria()),
-          );
-          expect(
-            await entrada.entrar(email, 'palavra-passe-de-teste-1'),
-            isNull,
-          );
-        } finally {
-          await novaApi.pedir(
-            'DELETE',
-            '/auth/me',
-            corpo: {'senha': 'palavra-passe-de-teste-1'},
-          );
-        }
-        final depois = AutenticacaoApi(
-          ClienteApi(base: Uri.parse(apiReal), sessao: SessaoMemoria()),
-        );
-        expect(
-          await depois.entrar(email, 'palavra-passe-de-teste-1'),
-          'credenciais_invalidas',
-        );
-      },
-    );
 
     test(
       'a sessão renova-se sozinha quando o token de acesso é inválido',
       () async {
-        await auth.entrar('demo@amparo.test', 'amparo-demo-123');
-        await api.sessao.guardar(
+        await c.api.sessao.guardar(
           acesso: 'token-estragado',
-          renovacao: api.sessao.renovacao!,
+          renovacao: c.api.sessao.renovacao!,
         );
-        final perfis = await repo.perfis(); // 401 → renova → repete
-        expect(perfis, isNotEmpty);
-        expect(api.sessao.acesso, isNot('token-estragado'));
+        expect(await c.repo.perfis(), isEmpty); // 401 → renova → repete
+        expect(c.api.sessao.acesso, isNot('token-estragado'));
       },
     );
   });
