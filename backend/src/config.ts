@@ -18,6 +18,11 @@ const schema = z.object({
   PROFILE_MASTER_KEY: z.string().length(43),
   /** Caminho do ficheiro JSON da conta de serviço do Firebase (só Cloud Messaging). Sem isto, o push fica desligado. */
   FCM_SERVICE_ACCOUNT_FILE: z.string().min(1).optional(),
+  /** Origens (separadas por vírgulas) autorizadas a chamar a API a partir de um navegador, por exemplo a app web em desenvolvimento. Lista explícita, nunca `*`. Vazio: sem CORS (as apps de telemóvel não precisam). */
+  CORS_ORIGINS: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : [])),
   /** Servidor SMTP para os emails (recuperação de palavra-passe), ex.: smtps://utilizador:segredo@smtp.exemplo.com:465. Sem isto, não se envia email. */
   SMTP_URL: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(3).default('Amparo <nao-responder@amparo.example>'),

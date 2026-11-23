@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:amparo/app.dart';
+import 'package:amparo/dados/autenticacao.dart';
 import 'package:amparo/dados/repositorio_memoria.dart';
 import 'package:amparo/tema/tokens.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +22,7 @@ Future<void> abrir(WidgetTester tester) async {
   await tester.pumpWidget(
     AmparoApp(
       repositorio: RepositorioMemoria(agora: agora),
+      autenticacao: AutenticacaoMemoria(),
       relogio: () => agora,
     ),
   );

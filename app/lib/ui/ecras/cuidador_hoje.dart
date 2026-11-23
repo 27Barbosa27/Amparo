@@ -70,8 +70,11 @@ class CuidadorHoje extends StatelessWidget {
                   padding: EdgeInsets.only(top: 60),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (controlador.erro == 'falha_ao_carregar')
-                _Erro(aoTentar: controlador.carregar)
+              else if (controlador.falhouCarregar)
+                _Erro(
+                  aoTentar: controlador.carregar,
+                  semRede: controlador.erro == 'sem_rede',
+                )
               else ...[
                 _ResumoDia(
                   resumo: controlador.resumo,
@@ -136,8 +139,9 @@ class _ChipPerfil extends StatelessWidget {
 }
 
 class _Erro extends StatelessWidget {
-  const _Erro({required this.aoTentar});
+  const _Erro({required this.aoTentar, this.semRede = false});
   final VoidCallback aoTentar;
+  final bool semRede;
 
   @override
   Widget build(BuildContext context) {
@@ -148,7 +152,9 @@ class _Erro extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Não foi possível carregar as tomas.',
+            semRede
+                ? 'Sem ligação. Verifique a internet e tente outra vez.'
+                : 'Não foi possível carregar as tomas.',
             style: Estilos.corpo(t, peso: FontWeight.w800, cor: t.mauTexto),
           ),
           const SizedBox(height: 12),

@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'dados/api.dart';
+import 'dados/autenticacao.dart';
 import 'dados/repositorio.dart';
 import 'dominio/modelos.dart';
 import 'estado/hoje_controlador.dart';
@@ -18,23 +20,29 @@ class AmparoApp extends StatefulWidget {
   const AmparoApp({
     super.key,
     required this.repositorio,
+    required this.autenticacao,
     this.relogio = DateTime.now,
     this.escuroInicial = true,
     this.telaInicial = '',
+    this.credenciaisDev,
   });
 
   final Repositorio repositorio;
+  final Autenticacao autenticacao;
   final Relogio relogio;
   final bool escuroInicial;
 
   /// Só para desenvolvimento e capturas: abre direto num ecrã (`entrar-erro`, `hoje`, `simples`, `sucesso`).
   final String telaInicial;
 
+  /// Só para desenvolvimento: entra sozinho com estas credenciais quando se abre direto num ecrã (`--dart-define`).
+  final ({String email, String senha})? credenciaisDev;
+
   @override
   State<AmparoApp> createState() => _AmparoAppState();
 }
 
-enum _Modo { entrar, cuidador, previewPessoa, sucesso }
+enum _Modo { aArrancar, entrar, semPessoas, cuidador, previewPessoa, sucesso }
 
 class _AmparoAppState extends State<AmparoApp> {
   late bool _escuro = widget.escuroInicial;
@@ -42,43 +50,94 @@ class _AmparoAppState extends State<AmparoApp> {
   @override
   void initState() {
     super.initState();
-    if (widget.telaInicial.isNotEmpty &&
-        widget.telaInicial != 'entrar' &&
-        widget.telaInicial != 'entrar-erro') {
-      _arranqueDeDesenvolvimento();
-    }
+    _arrancar();
   }
 
-  Future<void> _arranqueDeDesenvolvimento() async {
-    _perfis = await widget.repositorio.perfis();
-    _abrirPerfil(_perfis.first);
+  /// Retoma a sessão guardada, se houver; em desenvolvimento pode abrir direto num ecrã.
+  Future<void> _arrancar() async {
+    try {
+      final dev =
+          widget.telaInicial.isNotEmpty &&
+          widget.telaInicial != 'entrar' &&
+          widget.telaInicial != 'entrar-erro';
+      var dentro = await widget.autenticacao.restaurar();
+      if (!dentro && dev && widget.credenciaisDev != null) {
+        dentro =
+            await widget.autenticacao.entrar(
+              widget.credenciaisDev!.email,
+              widget.credenciaisDev!.senha,
+            ) ==
+            null;
+      }
+      if (dentro) {
+        await _abrirSessao();
+        if (dev && _controlador != null) await _ecraDeDesenvolvimento();
+      } else {
+        _modo = _Modo.entrar;
+      }
+    } on ErroApi {
+      _modo = _Modo.entrar;
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _ecraDeDesenvolvimento() async {
     await _controlador!.carregar();
     switch (widget.telaInicial) {
       case 'simples':
         _modo = _Modo.previewPessoa;
       case 'sucesso':
-        await _controlador!.marcarTomada(
-          _controlador!.tomas.firstWhere((t) => t.id == 't2'),
+        final pendentes = _controlador!.tomas.where(
+          (t) => t.estado == EstadoToma.pendente,
         );
-        _modo = _Modo.sucesso;
+        if (pendentes.isNotEmpty) {
+          await _controlador!.marcarTomada(pendentes.first);
+          _tomaDoSucesso = pendentes.first.id;
+          _modo = _Modo.sucesso;
+        }
       default:
-        _modo = _Modo.cuidador;
+    }
+  }
+
+  _Modo _modo = _Modo.aArrancar;
+  String? _tomaDoSucesso;
+  HojeControlador? _controlador;
+  List<Perfil> _perfis = const [];
+  int _separador = 0;
+
+  /// Entra pela API (ou pelos dados falsos) e abre a primeira pessoa. Devolve o código de erro, se houver.
+  Future<String?> _entrar(String email, String senha) async {
+    final erro = await widget.autenticacao.entrar(email, senha);
+    if (erro != null) return erro;
+    try {
+      await _abrirSessao();
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+    return null;
+  }
+
+  Future<void> _abrirSessao() async {
+    _perfis = await widget.repositorio.perfis();
+    if (_perfis.isEmpty) {
+      _modo = _Modo.semPessoas;
+    } else {
+      _abrirPerfil(_perfis.first);
+      _modo = _Modo.cuidador;
     }
     if (mounted) setState(() {});
   }
 
-  _Modo _modo = _Modo.entrar;
-  HojeControlador? _controlador;
-  List<Perfil> _perfis = const [];
-  int _separador = 0;
-  final String _nomeCuidador = 'Ana';
+  Future<void> _terminarSessao() async {
+    await widget.autenticacao.sair();
+    _voltarAEntrar();
+  }
 
-  /// Entrada de teste: aceita qualquer credencial com sentido. A autenticação a sério liga-se à API depois.
-  Future<String?> _entrar(String email, String senha) async {
-    _perfis = await widget.repositorio.perfis();
-    _abrirPerfil(_perfis.first);
-    setState(() => _modo = _Modo.cuidador);
-    return null;
+  void _voltarAEntrar() {
+    _controlador?.dispose();
+    _controlador = null;
+    _separador = 0;
+    if (mounted) setState(() => _modo = _Modo.entrar);
   }
 
   void _abrirPerfil(Perfil p) {
@@ -87,7 +146,8 @@ class _AmparoAppState extends State<AmparoApp> {
       repositorio: widget.repositorio,
       perfil: p,
       relogio: widget.relogio,
-      cuidador: _nomeCuidador,
+      cuidador: widget.autenticacao.nome,
+      aoSessaoExpirada: _voltarAEntrar,
     )..carregar();
     setState(() {});
   }
@@ -134,6 +194,10 @@ class _AmparoAppState extends State<AmparoApp> {
   Widget _corpo(BuildContext context) {
     final c = _controlador;
     switch (_modo) {
+      case _Modo.aArrancar:
+        return const Center(child: CircularProgressIndicator());
+      case _Modo.semPessoas:
+        return _SemPessoas(aoTerminarSessao: _terminarSessao);
       case _Modo.entrar:
         return EntrarEcra(
           aoEntrar: _entrar,
@@ -158,7 +222,7 @@ class _AmparoAppState extends State<AmparoApp> {
       case _Modo.sucesso:
         return SucessoMarcadaEcra(
           controlador: c!,
-          tomaId: 't2',
+          tomaId: _tomaDoSucesso ?? '',
           aoVoltar: () => setState(() => _modo = _Modo.cuidador),
         );
       case _Modo.previewPessoa:
@@ -200,12 +264,7 @@ class _AmparoAppState extends State<AmparoApp> {
             aoMudarTema: (v) => setState(() => _escuro = v),
             aoVerComoAPessoaVe: () =>
                 setState(() => _modo = _Modo.previewPessoa),
-            aoTerminarSessao: () => setState(() {
-              _controlador?.dispose();
-              _controlador = null;
-              _separador = 0;
-              _modo = _Modo.entrar;
-            }),
+            aoTerminarSessao: _terminarSessao,
           ),
         };
         return Stack(
@@ -266,6 +325,53 @@ class _EscolherPerfil extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Entrou, mas ainda não há ninguém para acompanhar. O ecrã "Adicionar pessoa" vem a seguir.
+class _SemPessoas extends StatelessWidget {
+  const _SemPessoas({required this.aoTerminarSessao});
+  final VoidCallback aoTerminarSessao;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text('Quem vai acompanhar?', style: Estilos.titulo(t)),
+                ),
+                const SizedBox(height: 12),
+                Cartao(
+                  child: Text(
+                    'Ainda não adicionou ninguém. O ecrã "Adicionar pessoa" vem a seguir.',
+                    style: Estilos.corpo(t),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Botao(
+                  texto: 'Terminar sessão',
+                  icone: Icons.logout,
+                  fundo: t.superficie,
+                  cor: t.texto,
+                  contorno: t.linha,
+                  aoTocar: aoTerminarSessao,
+                ),
+              ],
+            ),
           ),
         ),
       ),

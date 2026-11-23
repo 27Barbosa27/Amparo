@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../dados/api.dart';
 import '../dados/repositorio.dart';
 import '../dominio/modelos.dart';
 
@@ -12,6 +13,7 @@ class HojeControlador extends ChangeNotifier {
     required this.perfil,
     required this.relogio,
     this.cuidador,
+    this.aoSessaoExpirada,
   });
 
   final Repositorio repositorio;
@@ -21,11 +23,15 @@ class HojeControlador extends ChangeNotifier {
   /// Quem está a usar a app, quando é um cuidador. Nulo no telemóvel da pessoa.
   final String? cuidador;
 
+  /// Chamado quando a sessão expirou e não deu para a renovar (volta ao ecrã de Entrar).
+  final VoidCallback? aoSessaoExpirada;
+
   List<Toma> _tomas = const [];
   List<DiaAdesao> _semana = const [];
   String? _nomeCuidador;
   bool _aCarregar = true;
   String? _erro;
+  bool _falhouCarregar = false;
 
   List<Toma> get tomas => _tomas;
   bool get aCarregar => _aCarregar;
@@ -36,6 +42,9 @@ class HojeControlador extends ChangeNotifier {
 
   /// Código estável do último erro (ver "Erros" no plano), ou nulo.
   String? get erro => _erro;
+
+  /// Verdadeiro se a última tentativa de carregar as tomas falhou.
+  bool get falhouCarregar => _falhouCarregar;
 
   DateTime get agora => relogio();
 
@@ -52,13 +61,19 @@ class HojeControlador extends ChangeNotifier {
   Future<void> carregar() async {
     _aCarregar = true;
     _erro = null;
+    _falhouCarregar = false;
     notifyListeners();
     try {
       _tomas = await repositorio.tomasDeHoje(perfil.id, agora);
       _tomas = [..._tomas]..sort((a, b) => a.agendada.compareTo(b.agendada));
       _semana = await repositorio.ultimos7Dias(perfil.id, agora);
       _nomeCuidador = await repositorio.nomeDoCuidador(perfil.id);
+    } on ErroApi catch (e) {
+      _falhouCarregar = true;
+      _erro = e.codigo;
+      if (e.codigo == 'sessao_expirada') aoSessaoExpirada?.call();
     } catch (_) {
+      _falhouCarregar = true;
       _erro = 'falha_ao_carregar';
     }
     _aCarregar = false;
@@ -74,6 +89,9 @@ class HojeControlador extends ChangeNotifier {
       return true;
     } on RegistoNaoPermitido catch (e) {
       _erro = e.motivo;
+    } on ErroApi catch (e) {
+      _erro = e.codigo;
+      if (e.codigo == 'sessao_expirada') aoSessaoExpirada?.call();
     } catch (_) {
       _erro = 'falha_ao_guardar';
     }
@@ -83,6 +101,7 @@ class HojeControlador extends ChangeNotifier {
 
   Future<bool> marcarTomada(Toma t, {DateTime? hora}) => _executar(
     () => repositorio.marcarTomada(
+      perfil.id,
       t.id,
       agora,
       hora: hora,
@@ -90,9 +109,10 @@ class HojeControlador extends ChangeNotifier {
     ),
   );
 
-  Future<bool> saltar(Toma t) =>
-      _executar(() => repositorio.saltar(t.id, agora, porCuidador: cuidador));
+  Future<bool> saltar(Toma t) => _executar(
+    () => repositorio.saltar(perfil.id, t.id, agora, porCuidador: cuidador),
+  );
 
   Future<bool> desfazer(Toma t) =>
-      _executar(() => repositorio.desfazer(t.id, agora));
+      _executar(() => repositorio.desfazer(perfil.id, t.id, agora));
 }

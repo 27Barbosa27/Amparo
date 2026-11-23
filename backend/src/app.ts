@@ -34,6 +34,25 @@ export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
   app.disable('x-powered-by');
   if (config.TRUST_PROXY > 0) app.set('trust proxy', config.TRUST_PROXY);
   app.use(helmet());
+
+  // CORS só para as origens da lista (a app web em desenvolvimento). Sem lista, nada é aberto.
+  if (config.CORS_ORIGINS.length > 0) {
+    app.use((req, res, next) => {
+      const origem = req.header('origin');
+      if (origem && config.CORS_ORIGINS.includes(origem)) {
+        res.setHeader('Access-Control-Allow-Origin', origem);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type, x-profile-id, idempotency-key');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Max-Age', '600');
+        if (req.method === 'OPTIONS') {
+          res.status(204).end();
+          return;
+        }
+      }
+      next();
+    });
+  }
   app.use(express.json({ limit: '100kb' }));
 
   // Registo dos pedidos: só o método, o padrão da rota (sem ids), o estado e a duração. Nunca corpo, query, cabeçalhos nem IP.

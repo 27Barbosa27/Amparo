@@ -11,16 +11,22 @@ abstract class Repositorio {
   /// `hora` é a hora real da toma ("Agora", "Há 1 hora", "À hora prevista", "Outra hora"). Por omissão, agora.
   /// `porCuidador` é o nome de quem registou, se foi um cuidador.
   Future<Toma> marcarTomada(
+    String perfilId,
     String tomaId,
     DateTime agora, {
     DateTime? hora,
     String? porCuidador,
   });
 
-  Future<Toma> saltar(String tomaId, DateTime agora, {String? porCuidador});
+  Future<Toma> saltar(
+    String perfilId,
+    String tomaId,
+    DateTime agora, {
+    String? porCuidador,
+  });
 
   /// Só funciona até 1 minuto depois do registo.
-  Future<Toma> desfazer(String tomaId, DateTime agora);
+  Future<Toma> desfazer(String perfilId, String tomaId, DateTime agora);
 
   /// Os últimos 7 dias (o último é hoje), para o cartão de adesão.
   Future<List<DiaAdesao>> ultimos7Dias(String perfilId, DateTime agora);

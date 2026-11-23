@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- A app fala com a API do Amparo por HTTPS. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="amparo"
         android:name="${applicationName}"

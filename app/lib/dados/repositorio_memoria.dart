@@ -77,6 +77,7 @@ class RepositorioMemoria implements Repositorio {
 
   @override
   Future<Toma> marcarTomada(
+    String perfilId,
     String tomaId,
     DateTime agora, {
     DateTime? hora,
@@ -104,6 +105,7 @@ class RepositorioMemoria implements Repositorio {
 
   @override
   Future<Toma> saltar(
+    String perfilId,
     String tomaId,
     DateTime agora, {
     String? porCuidador,
@@ -124,7 +126,7 @@ class RepositorioMemoria implements Repositorio {
   }
 
   @override
-  Future<Toma> desfazer(String tomaId, DateTime agora) async {
+  Future<Toma> desfazer(String perfilId, String tomaId, DateTime agora) async {
     final atual = _procurar(tomaId);
     if (atual.estado == EstadoToma.pendente) return atual;
     if (!atual.podeDesfazer(agora)) {

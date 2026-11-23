@@ -72,6 +72,7 @@ void main() {
 
     test('marcar como tomada guarda a hora real e quem marcou', () async {
       final t = await repo.marcarTomada(
+        'maria',
         't2',
         sabado13h,
         hora: DateTime(2026, 11, 21, 12),
@@ -83,9 +84,9 @@ void main() {
     });
 
     test('não se regista duas vezes a mesma toma', () async {
-      await repo.marcarTomada('t2', sabado13h);
+      await repo.marcarTomada('maria', 't2', sabado13h);
       expect(
-        () => repo.marcarTomada('t2', sabado13h),
+        () => repo.marcarTomada('maria', 't2', sabado13h),
         throwsA(
           isA<RegistoNaoPermitido>().having(
             (e) => e.motivo,
@@ -95,7 +96,7 @@ void main() {
         ),
       );
       expect(
-        () => repo.saltar('t2', sabado13h),
+        () => repo.saltar('maria', 't2', sabado13h),
         throwsA(isA<RegistoNaoPermitido>()),
       );
     });
@@ -103,6 +104,7 @@ void main() {
     test('recusa uma hora no futuro', () {
       expect(
         () => repo.marcarTomada(
+          'maria',
           't2',
           sabado13h,
           hora: sabado13h.add(const Duration(hours: 1)),
@@ -120,16 +122,21 @@ void main() {
     test(
       'desfazer volta a pendente dentro de 1 minuto e é recusado depois',
       () async {
-        await repo.marcarTomada('t2', sabado13h);
+        await repo.marcarTomada('maria', 't2', sabado13h);
         final volta = await repo.desfazer(
+          'maria',
           't2',
           sabado13h.add(const Duration(seconds: 30)),
         );
         expect(volta.estado, EstadoToma.pendente);
         expect(volta.tomadaEm, isNull);
-        await repo.marcarTomada('t2', sabado13h);
+        await repo.marcarTomada('maria', 't2', sabado13h);
         expect(
-          () => repo.desfazer('t2', sabado13h.add(const Duration(minutes: 2))),
+          () => repo.desfazer(
+            'maria',
+            't2',
+            sabado13h.add(const Duration(minutes: 2)),
+          ),
           throwsA(
             isA<RegistoNaoPermitido>().having(
               (e) => e.motivo,
