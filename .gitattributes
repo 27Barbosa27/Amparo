@@ -1,0 +1,6 @@
+# Os scripts de shell têm de ficar sempre com fins de linha Unix, mesmo num clone feito no Windows.
+*.sh text eol=lf
+Containerfile text eol=lf
+Caddyfile text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf

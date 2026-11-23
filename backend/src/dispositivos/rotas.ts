@@ -45,6 +45,8 @@ export function rotasDispositivosDoPerfil(db: Db, config: Config): Router {
 export interface OpcoesDispositivos {
   /** Limite de tentativas FALHADAS de código por IP (desligável nos testes). */
   limitarCodigos?: { janelaMs: number; maximo: number } | false;
+  /** Limite de falhas de TODOS os IPs juntos: com 6 dígitos, um ataque com muitos IPs ainda é uma ameaça. */
+  limitarCodigosGlobal?: { janelaMs: number; maximo: number } | false;
 }
 
 const resgatarSchema = z.object({
@@ -60,6 +62,7 @@ const heartbeatSchema = z.object({
 export function rotasPublicasDispositivo(db: Db, config: Config, opcoes: OpcoesDispositivos = {}): Router {
   const router = Router();
   const limite = opcoes.limitarCodigos ?? { janelaMs: 15 * 60_000, maximo: 10 };
+  const limiteGlobal = opcoes.limitarCodigosGlobal ?? { janelaMs: 15 * 60_000, maximo: 100 };
 
   router.post(
     '/pairing/redeem',
@@ -69,6 +72,19 @@ export function rotasPublicasDispositivo(db: Db, config: Config, opcoes: OpcoesD
           limit: limite.maximo,
           skipSuccessfulRequests: true, // só contam as tentativas falhadas
           standardHeaders: 'draft-7',
+          legacyHeaders: false,
+          handler: (_req, res) => {
+            res.status(429).json({ erro: 'demasiadas_tentativas' });
+          },
+        })
+      : (_req, _res, next) => next(),
+    limiteGlobal
+      ? rateLimit({
+          windowMs: limiteGlobal.janelaMs,
+          limit: limiteGlobal.maximo,
+          skipSuccessfulRequests: true,
+          keyGenerator: () => 'global',
+          standardHeaders: false,
           legacyHeaders: false,
           handler: (_req, res) => {
             res.status(429).json({ erro: 'demasiadas_tentativas' });

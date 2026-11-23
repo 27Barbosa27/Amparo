@@ -31,6 +31,7 @@ services:
     command: ["node", "node_modules/node-pg-migrate/bin/node-pg-migrate.js", "up", "-m", "migrations"]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
@@ -46,7 +47,8 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
       TRUST_PROXY: "1" # o Caddy está à frente
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # A API NÃO usa o dono da base de dados: usa amparo_runtime, que nem pode alterar nem apagar a auditoria.
+      DATABASE_URL: postgres://amparo_runtime:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}
       FCM_SERVICE_ACCOUNT_FILE: /run/secrets/fcm-service-account.json
     volumes:
       - ./secrets:/run/secrets:ro

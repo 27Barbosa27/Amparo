@@ -298,3 +298,15 @@ describe('Contacto do cuidador', () => {
     expect((await request(app).get('/auth/me').set(auth(a))).body.utilizador.telefone).toBeNull();
   });
 });
+
+describe('Limite global de falhas do código (ataque com muitos IPs)', () => {
+  it('conta as falhas de todos juntos, mesmo sem limite por IP', async () => {
+    const limitada = createApp(db, config, {
+      auth: { limitarPorIp: false },
+      dispositivos: { limitarCodigos: false, limitarCodigosGlobal: { janelaMs: 60_000, maximo: 3 } },
+    });
+    const estados: number[] = [];
+    for (let i = 0; i < 5; i++) estados.push((await request(limitada).post('/pairing/redeem').send({ codigo: '000000' })).status);
+    expect(estados).toEqual([400, 400, 400, 429, 429]);
+  });
+});

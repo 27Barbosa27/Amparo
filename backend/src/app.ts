@@ -7,11 +7,12 @@ import { rotasAuth, type OpcoesAuth } from './auth/rotas.js';
 import { rotasAlertPrefs } from './alertas/rotas.js';
 import { lerChave } from './auth/cifra.js';
 import { contactosDoPerfil } from './auth/conta.js';
-import { exigirPrincipal, perfilDoPedido } from './auth/principal.js';
+import { exigirPrincipal, perfilDoPedido, soUtilizador } from './auth/principal.js';
 import type { Config } from './config.js';
 import { rotasPublicasDispositivo, type OpcoesDispositivos } from './dispositivos/rotas.js';
 import { pingDb, type Db } from './db.js';
 import { semEventos, type Eventos } from './eventos.js';
+import { rotasMedicacao } from './medicacao/rotas.js';
 import { ErroPerfil } from './perfis/acesso.js';
 import { rotaPerfilAtivo, rotasPerfis } from './perfis/rotas.js';
 import { rotasPush } from './push/rotas.js';
@@ -87,6 +88,12 @@ export function createApp(db: Db, config: Config, opcoes: OpcoesApp = {}) {
   app.use('/perfil-ativo', rotaPerfilAtivo(db, config));
   app.use(rotasPublicasDispositivo(db, config, opcoes.dispositivos));
   app.use('/tomas', rotasTomas(db, config, opcoes.eventos ?? semEventos));
+
+  // O mapa do plano usa /receitas e /medicamentos com o perfil no cabeçalho X-Profile-Id (as mesmas rotas de /profiles/:id/...).
+  const medicacaoPorCabecalho = express.Router();
+  medicacaoPorCabecalho.use(['/receitas', '/medicamentos'], exigirPrincipal(db, config.JWT_SECRET), soUtilizador, perfilDoPedido(db));
+  medicacaoPorCabecalho.use(rotasMedicacao(db, lerChave(config.PROFILE_MASTER_KEY), opcoes.eventos ?? semEventos));
+  app.use(medicacaoPorCabecalho);
   app.use('/alert-prefs', rotasAlertPrefs(db, config));
 
   // Quem cuida da pessoa e tem telefone (para o botão "Ligar"): cuidadores e o telemóvel da pessoa.

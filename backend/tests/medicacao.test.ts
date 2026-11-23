@@ -295,3 +295,54 @@ describe('IDOR na medicação', () => {
     expect(a.id).toBeTruthy();
   });
 });
+
+describe('Rotas com X-Profile-Id (mapa do plano: /receitas, /medicamentos)', () => {
+  const h = (c: Conta, p: string) => ({ ...auth(c), 'X-Profile-Id': p });
+
+  it('criar, ler, editar e apagar com o perfil no cabeçalho', async () => {
+    const a = await conta();
+    const p = await perfil(a);
+    const m = await request(app).post('/medicamentos').set(h(a, p)).send({ nome: 'Ramipril 5 mg' });
+    expect(m.status).toBe(201);
+    const r = await request(app).post('/receitas').set(h(a, p)).send(corpoReceita(m.body.medicamento.id));
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect((await request(app).get('/receitas').set(h(a, p))).body.receitas).toHaveLength(1);
+    const alt = await request(app).patch(`/receitas/${r.body.receita.id}`).set(h(a, p)).send({ dose: '2 comprimidos' });
+    expect(alt.body.receita.dose).toBe('2 comprimidos');
+    // são as mesmas receitas que em /profiles/:id/receitas
+    expect((await request(app).get(`/profiles/${p}/receitas/${r.body.receita.id}`).set(auth(a))).body.receita.dose).toBe('2 comprimidos');
+    expect((await request(app).delete(`/receitas/${r.body.receita.id}`).set(h(a, p))).status).toBe(204);
+  });
+
+  it('exige autenticação e um perfil a que se tenha acesso (IDOR)', async () => {
+    const a = await conta('Ana');
+    const b = await conta('Bruno');
+    const pa = await perfil(a);
+    const ma = await medicamento(a, pa);
+    const ra = await receita(a, pa, ma);
+    expect((await request(app).get('/receitas')).status).toBe(401);
+    expect((await request(app).get('/receitas').set(auth(a))).status).toBe(404); // sem X-Profile-Id
+    for (const r of await Promise.all([
+      request(app).get('/receitas').set(h(b, pa)),
+      request(app).get(`/receitas/${ra}`).set(h(b, pa)),
+      request(app).patch(`/receitas/${ra}`).set(h(b, pa)).send({ ativa: false }),
+      request(app).delete(`/medicamentos/${ma}`).set(h(b, pa)),
+      request(app).post('/medicamentos').set(h(b, pa)).send({ nome: 'Intruso' }),
+    ])) {
+      expect(r.status).toBe(404);
+      expect(r.body).toEqual({ erro: 'perfil_nao_encontrado' });
+    }
+    expect((await db.query('select ativa from receitas where id = $1', [ra])).rows[0].ativa).toBe(true);
+  });
+
+  it('o telemóvel da pessoa não alcança estas rotas', async () => {
+    const a = await conta();
+    const p = await perfil(a);
+    const cod = await request(app).post(`/profiles/${p}/pairing-codes`).set(auth(a));
+    const red = await request(app).post('/pairing/redeem').send({ codigo: cod.body.codigo });
+    const dev = { Authorization: `Bearer ${red.body.token}`, 'X-Profile-Id': p };
+    expect((await request(app).get('/receitas').set(dev)).status).toBe(403);
+    expect((await request(app).get('/medicamentos').set(dev)).status).toBe(403);
+    expect((await request(app).post('/medicamentos').set(dev).send({ nome: 'X' })).status).toBe(403);
+  });
+});
