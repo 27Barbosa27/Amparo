@@ -99,6 +99,7 @@ export async function limpar(db: Db): Promise<void> {
   await db.query("delete from tomas_removidas where removida_em < now() - interval '30 days'");
   await db.query("delete from alertas_enviados where enviado_em < now() - interval '30 days'");
   await db.query("delete from push_tokens where revogado_em < now() - interval '30 days'");
+  await db.query("delete from password_resets where expira_em < now() - interval '1 day'");
 }
 
 /** Todos os minutos: primeiro os avisos (olham para tomas pendentes), depois marcar as falhadas. */

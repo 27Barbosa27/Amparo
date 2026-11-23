@@ -18,6 +18,11 @@ const schema = z.object({
   PROFILE_MASTER_KEY: z.string().length(43),
   /** Caminho do ficheiro JSON da conta de serviço do Firebase (só Cloud Messaging). Sem isto, o push fica desligado. */
   FCM_SERVICE_ACCOUNT_FILE: z.string().min(1).optional(),
+  /** Servidor SMTP para os emails (recuperação de palavra-passe), ex.: smtps://utilizador:segredo@smtp.exemplo.com:465. Sem isto, não se envia email. */
+  SMTP_URL: z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(3).default('Amparo <nao-responder@amparo.example>'),
+  /** Endereço base da ligação do email, que abre a app (link direto). */
+  APP_LINK_BASE: z.string().url().default('https://amparo.example/repor'),
   /** Entrar com a Apple: o identificador da aplicação (`aud` do ID token). Sem isto o endpoint responde 501. */
   APPLE_CLIENT_ID: z.string().min(1).optional(),
   /** Entrar com a Google: os identificadores de cliente aceites (web, Android, iOS), separados por vírgulas. */

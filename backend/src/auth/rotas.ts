@@ -6,6 +6,8 @@ import type { Db } from '../db.js';
 import { apagarConta, atualizarConta, exportarConta, telefoneDoUtilizador } from './conta.js';
 import { lerChave } from './cifra.js';
 import { ErroAuth } from './erros.js';
+import { pedirRecuperacao, reporSenha } from './recuperacao.js';
+import { enviadorEmailNulo, type EnviadorEmail } from '../email/enviador.js';
 import { criarVerificadorExterno, entrarComFornecedor, type Provedor, type VerificadorExterno } from './externo.js';
 import { exigirAutenticacao } from './middleware.js';
 import { entrar, perfilDoUtilizador, registar, renovar, sair } from './servico.js';
@@ -40,6 +42,8 @@ const externoSchema = z.object({
   consentimentoVersao: z.string().min(1).max(20).default(VERSAO_CONSENTIMENTO_ATUAL),
 });
 const apagarSchema = z.object({ senha: z.string().max(128).optional(), confirmar: z.boolean().optional() });
+const recuperarSchema = z.object({ email: emailSchema });
+const reporSchema = z.object({ token: z.string().min(20).max(200), senha: senhaSchema });
 const refreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
 
 export interface OpcoesAuth {
@@ -47,6 +51,8 @@ export interface OpcoesAuth {
   limitarPorIp?: { janelaMs: number; maximo: number } | false;
   /** Valida os ID tokens da Apple e da Google (os testes injetam chaves locais). */
   verificadorExterno?: VerificadorExterno;
+  /** Envia o email de recuperação de palavra-passe (os testes passam um falso). */
+  enviadorEmail?: EnviadorEmail;
 }
 
 export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Router {
@@ -56,7 +62,7 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
   const limite = opcoes.limitarPorIp ?? { janelaMs: 60_000, maximo: 20 };
   if (limite) {
     router.use(
-      ['/registo', '/register', '/login', '/refresh', '/apple', '/google'],
+      ['/registo', '/register', '/login', '/refresh', '/apple', '/google', '/recuperar', '/repor'],
       rateLimit({
         windowMs: limite.janelaMs,
         limit: limite.maximo,
@@ -97,6 +103,21 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
       res.status(r.novo ? 201 : 200).json({ utilizador: { id: r.userId, nome: r.nome }, ...r.sessao });
     });
   }
+
+  router.post('/recuperar', async (req, res) => {
+    const d = recuperarSchema.safeParse(req.body);
+    // Resposta igual para tudo (conta que existe ou não, e até um email mal formado): não se revela nada.
+    if (d.success) {
+      await pedirRecuperacao(db, d.data.email, segredos, { enviador: opcoes.enviadorEmail ?? enviadorEmailNulo, linkBase: config.APP_LINK_BASE }, req.ip);
+    }
+    res.status(202).json({ mensagem: 'Se existir uma conta com esse email, enviámos uma ligação para definir a palavra-passe.' });
+  });
+
+  router.post('/repor', async (req, res) => {
+    const d = reporSchema.parse(req.body);
+    await reporSenha(db, d.token, d.senha, req.ip);
+    res.status(204).end();
+  });
 
   router.post('/refresh', async (req, res) => {
     const d = refreshSchema.parse(req.body);

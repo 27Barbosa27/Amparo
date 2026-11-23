@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 import { lerChave } from './auth/cifra.js';
 import { loadConfig } from './config.js';
 import { createPool } from './db.js';
+import { criarEnviadorSmtp, enviadorEmailNulo } from './email/enviador.js';
 import { iniciarAgendador } from './jobs/agendador.js';
 import { criarEnviadorFcm, enviadorNulo, type ContaServico } from './push/enviador.js';
 import { criarEventosPush } from './push/servico.js';
@@ -19,7 +20,11 @@ if (config.FCM_SERVICE_ACCOUNT_FILE) {
   console.warn('Push desligado: falta FCM_SERVICE_ACCOUNT_FILE.');
 }
 
-const app = createApp(db, config, { eventos: criarEventosPush(db, enviador, chaveCampos) });
+let enviadorEmail = enviadorEmailNulo;
+if (config.SMTP_URL) enviadorEmail = criarEnviadorSmtp(config.SMTP_URL, config.EMAIL_FROM);
+else console.warn('Email desligado: falta SMTP_URL (a recuperação de palavra-passe não envia nada).');
+
+const app = createApp(db, config, { eventos: criarEventosPush(db, enviador, chaveCampos), auth: { enviadorEmail } });
 const pararAgendador = iniciarAgendador({ db, enviador, chaveCampos, chaveMestra });
 
 // Atrás do Caddy, o IP verdadeiro vem no cabeçalho; o Caddy fica na mesma máquina.

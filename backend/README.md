@@ -32,7 +32,7 @@ O `.env` nunca vai para o Git.
 
 ## Estado: o backend do plano está completo
 
-**Autenticação** (`/auth`): `registo` (ou `register`), `login`, `apple`, `google`, `refresh`, `logout`, `me` (GET, PATCH telefone e nome, DELETE para apagar a conta), `me/exportacao`.
+**Autenticação** (`/auth`): `registo` (ou `register`), `login`, `apple`, `google`, `refresh`, `logout`, `me` (GET, PATCH telefone e nome, DELETE para apagar a conta), `me/exportacao`, `recuperar` e `repor` (recuperação de palavra-passe: link por email, 30 min, uso único, revoga todas as sessões; resposta igual exista a conta ou não).
 Argon2id; emails só como HMAC mais uma cópia cifrada; JWT de acesso de 15 min; refresh de 30 dias com rotação e revogação da família; bloqueio progressivo; Apple e Google validados no servidor (assinatura, `aud`, `exp`, `nonce`), sem Firebase Authentication.
 
 **Perfis e permissões** (`/profiles`, `/perfil-ativo`): papéis `owner`/`caregiver`; uma só verificação de acesso à frente de tudo; perfil alheio responde como inexistente (404); chave de cifra própria por perfil; `GET /profiles/:id/exportacao` (portabilidade).
@@ -54,11 +54,11 @@ Argon2id; emails só como HMAC mais uma cópia cifrada; JWT de acesso de 15 min;
 | Variável | Para quê |
 |---|---|
 | `APPLE_CLIENT_ID`, `GOOGLE_CLIENT_IDS` | Ligam o "Entrar com a Apple/Google" (sem elas, `501`) |
+| `SMTP_URL`, `EMAIL_FROM`, `APP_LINK_BASE` | Ligam o envio de email (qualquer fornecedor SMTP; em desenvolvimento, o Mailpit). Sem `SMTP_URL`, não se envia nada |
 | `FCM_SERVICE_ACCOUNT_FILE` | Liga o push (sem ele, o servidor avisa e continua) |
 | `HOST`, `TRUST_PROXY` | Atrás do Caddy: `0.0.0.0` e `1` (o `compose.prod.yaml` já os define) |
 
 ### Fica para depois de haver app e contas externas
 
-- Recuperação de palavra-passe por email: a cifra do email já está pronta; falta escolher o fornecedor de email e os endpoints (ver `../docs/plano.md`).
 - Testar o push e o "Entrar com a Apple/Google" contra os serviços verdadeiros: precisa das contas Firebase, Apple Developer e Google Cloud.
 - Rotação das chaves `EMAIL_ENC_KEY` e `PROFILE_MASTER_KEY` (o formato já tem versão; falta o script).

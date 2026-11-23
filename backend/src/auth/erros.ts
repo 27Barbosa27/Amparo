@@ -16,7 +16,8 @@ export class ErroAuth extends Error {
       | 'toma_ja_registada'
       | 'desfazer_expirado'
       | 'hora_invalida'
-      | 'senha_incorreta',
+      | 'senha_incorreta'
+      | 'token_invalido',
     public readonly estado: number,
   ) {
     super(codigo);

@@ -26,6 +26,7 @@
     "jose": "^6.2.18",
     "luxon": "^3.7.2",
     "node-pg-migrate": "^8.0.0",
+    "nodemailer": "^10.6.1",
     "pg": "^8.16.0",
     "zod": "^4.1.0"
   },
@@ -33,6 +34,7 @@
     "@types/express": "^5.0.0",
     "@types/luxon": "^3.7.6",
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.15.0",
     "@types/supertest": "^6.0.0",
     "supertest": "^7.1.0",
