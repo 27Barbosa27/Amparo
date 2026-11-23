@@ -105,6 +105,8 @@ export interface Receita {
   unidadesIniciais: number | null;
   stock: Stock | null;
   ativa: boolean;
+  /** Estado da geração das tomas (pode correr em segundo plano). */
+  geracao: { estado: 'a_gerar' | 'concluida' | 'falhou'; tomasGeradas: number };
 }
 
 interface LinhaReceita {
@@ -121,10 +123,12 @@ interface LinhaReceita {
   unidades_iniciais: number | null;
   ativa: boolean;
   tomadas: number;
+  geracao_estado: 'a_gerar' | 'concluida' | 'falhou';
+  geracao_tomas: number;
 }
 
 const COLUNAS_RECEITA = `id, medicamento_id, dose_cifrada, tipo, intervalo_horas::text as intervalo_horas,
-  horas_locais::text[] as horas_locais, timezone, inicio_utc, fim_utc, valida_ate::text as valida_ate, unidades_iniciais, ativa,
+  horas_locais::text[] as horas_locais, timezone, inicio_utc, fim_utc, valida_ate::text as valida_ate, unidades_iniciais, ativa, geracao_estado, geracao_tomas,
   (select count(*)::int from tomas t where t.receita_id = receitas.id and t.estado = 'tomada') as tomadas`;
 
 const paraReceita = (l: LinhaReceita, chave: Buffer): Receita => {
@@ -145,6 +149,7 @@ const paraReceita = (l: LinhaReceita, chave: Buffer): Receita => {
     unidadesIniciais: l.unidades_iniciais,
     stock: calcularStock(dose, horario, l.unidades_iniciais, l.tomadas),
     ativa: l.ativa,
+    geracao: { estado: l.geracao_estado, tomasGeradas: l.geracao_tomas },
   };
 };
 
@@ -163,7 +168,53 @@ export interface DadosReceita {
 }
 
 /** Cria a receita e as suas tomas iniciais, tudo ou nada. Devolve null se o medicamento não for deste perfil. */
-export async function criarReceita(db: Db, mestra: Buffer, userId: string, profileId: string, d: DadosReceita, ip?: string): Promise<Receita | null> {
+/**
+ * Gera as tomas de uma receita já criada e regista o resultado. Idempotente (nunca duplica tomas),
+ * por isso pode ser repetida se o servidor reiniciar a meio.
+ */
+export async function gerarEmSegundoPlano(db: Db, receitaId: string): Promise<void> {
+  try {
+    const n = await gerarTomasIniciais(db, receitaId, new Date());
+    await db.query("update receitas set geracao_estado = 'concluida', geracao_tomas = (select count(*)::int from tomas where receita_id = $1) where id = $1", [receitaId]);
+    void n;
+  } catch (e) {
+    console.error('Geração de tomas falhou:', e instanceof Error ? e.message : 'desconhecido');
+    await db.query("update receitas set geracao_estado = 'falhou' where id = $1", [receitaId]).catch(() => undefined);
+  }
+}
+
+/** Receitas que ficaram a meio (o servidor reiniciou): volta a gerar. */
+export async function retomarGeracoes(db: Db): Promise<number> {
+  const { rows } = await db.query<{ id: string }>(
+    "select id from receitas where geracao_estado in ('a_gerar', 'falhou') and criado_em < now() - interval '1 minute' and ativa limit 50",
+  );
+  for (const r of rows) await gerarEmSegundoPlano(db, r.id);
+  return rows.length;
+}
+
+export async function estadoGeracao(db: Db, profileId: string, id: string) {
+  const { rows } = await db.query<{ geracao_estado: string; geracao_tomas: number }>(
+    'select geracao_estado, geracao_tomas from receitas where id = $1 and profile_id = $2',
+    [id, profileId],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  const fase = r.geracao_estado === 'concluida' ? 'feito' : r.geracao_estado === 'falhou' ? 'falhou' : 'em_curso';
+  return {
+    estado: r.geracao_estado,
+    tomasGeradas: r.geracao_tomas,
+    // Os passos do ecrã "Carregamento". "Agendar os alarmes" é do telemóvel e só começa depois deste.
+    passos: [
+      { id: 'gerar_tomas', estado: fase },
+      { id: 'sincronizar', estado: fase === 'feito' ? 'feito' : fase === 'falhou' ? 'falhou' : 'pendente' },
+    ],
+  };
+}
+
+export async function criarReceita(
+  db: Db, mestra: Buffer, userId: string, profileId: string, d: DadosReceita, ip?: string,
+  opcoes: { assincrono?: boolean; aoGerar?: () => void } = {},
+): Promise<Receita | null> {
   const chave = await chaveDoPerfil(db, profileId, mestra);
   const cliente = await db.connect();
   try {
@@ -180,10 +231,22 @@ export async function criarReceita(db: Db, mestra: Buffer, userId: string, profi
       [profileId, d.medicamentoId, cifrar(d.dose, chave), ...colunasHorario(d.horario), d.timezone, d.inicio, d.fim, d.validaAte, d.unidadesIniciais],
     );
     const receita = rows[0]!;
-    await gerarTomasIniciais(cliente, receita.id, new Date());
+    if (opcoes.assincrono) {
+      // Fica "a gerar" e as tomas são criadas em segundo plano; o cliente consulta o estado.
+      await cliente.query("update receitas set geracao_estado = 'a_gerar' where id = $1", [receita.id]);
+    } else {
+      await gerarTomasIniciais(cliente, receita.id, new Date());
+      await cliente.query('update receitas set geracao_tomas = (select count(*)::int from tomas where receita_id = $1) where id = $1', [receita.id]);
+    }
     await auditar(cliente, 'receita.criar', 'receita', receita.id, userId, profileId, ip);
     await cliente.query('commit');
-    return paraReceita(receita, chave);
+    if (opcoes.assincrono) {
+      setImmediate(() => void gerarEmSegundoPlano(db, receita.id).then(() => opcoes.aoGerar?.()));
+      const { rows: atual } = await db.query<LinhaReceita>(`select ${COLUNAS_RECEITA} from receitas where id = $1`, [receita.id]);
+      return paraReceita(atual[0]!, chave);
+    }
+    const { rows: atual } = await db.query<LinhaReceita>(`select ${COLUNAS_RECEITA} from receitas where id = $1`, [receita.id]);
+    return paraReceita(atual[0]!, chave);
   } catch (e) {
     await cliente.query('rollback').catch(() => undefined);
     throw e;

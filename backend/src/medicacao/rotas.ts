@@ -117,9 +117,19 @@ export function rotasMedicacao(db: Db, mestra: Buffer, eventos: Eventos): Router
 
   router.post('/receitas', async (req, res) => {
     const d = receitaSchema.parse(req.body);
-    const r = await s.criarReceita(db, mestra, req.userId!, req.perfil!.id, d, req.ip);
+    // `?assincrono=true`: responde já (202) e gera as tomas em segundo plano; o ecrã de carregamento consulta /receitas/:id/geracao.
+    const assincrono = req.query.assincrono === 'true';
+    const r = await s.criarReceita(db, mestra, req.userId!, req.perfil!.id, d, req.ip, {
+      assincrono,
+      aoGerar: () => void dispararSemFalhar(() => eventos.sincronizar(req.perfil!.id)),
+    });
     if (!r) throw naoEncontrado(); // medicamento inexistente ou de outro perfil
-    res.status(201).json({ receita: r });
+    res.status(assincrono ? 202 : 201).json({ receita: r });
+  });
+  router.get('/receitas/:id/geracao', async (req, res) => {
+    const g = await s.estadoGeracao(db, req.perfil!.id, idDa(req.params.id));
+    if (!g) throw naoEncontrado();
+    res.json(g);
   });
   router.get('/receitas', async (req, res) => {
     res.json({ receitas: await s.listarReceitas(db, mestra, req.perfil!.id) });

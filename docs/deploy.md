@@ -90,7 +90,7 @@ O script cria um PostgreSQL descartável, restaura lá o backup e verifica as ta
 
 ## 8. Ainda por fazer (fora do código)
 
-- **DPIA** e **política de privacidade** (com Apple, Google/FCM, a VPS e o fornecedor de backups como subprocessadores).
+- **DPIA** e **política de privacidade**: há rascunhos baseados no que o sistema faz em `docs/dpia-rascunho.md` e `docs/politica-privacidade-rascunho.md`. Falta preencher os campos `[a preencher]` e a revisão jurídica.
 - **Aceitar o DPA da Google** na consola do Firebase.
 - **Conta Apple Developer** (paga) para push em iPhone real e para publicar.
 - **Escolher o fornecedor de email** (servidores na UE, DPA assinado) e pôr o `SMTP_URL`, `EMAIL_FROM` e `APP_LINK_BASE` no `.env.prod`. O código já está pronto e foi testado contra um servidor SMTP real; qualquer fornecedor com SMTP serve.

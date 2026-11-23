@@ -1,5 +1,5 @@
 import type { Db } from '../db.js';
-import { listarReceitas } from '../medicacao/servico.js';
+import { listarReceitas, retomarGeracoes } from '../medicacao/servico.js';
 import type { EnviadorPush } from '../push/enviador.js';
 import { alertarUtilizadores, marcarAlertaEnviado } from '../push/servico.js';
 import { manterJanela } from '../tomas/servico.js';
@@ -106,7 +106,8 @@ export async function limpar(db: Db): Promise<void> {
 export async function trabalhosDoMinuto(c: Contexto, agora = new Date()) {
   const alertas = await alertarNaoConfirmadas(c, agora);
   const falhadas = await marcarFalhadas(c.db, agora);
-  return { alertas, falhadas };
+  const retomadas = await retomarGeracoes(c.db);
+  return { alertas, falhadas, retomadas };
 }
 
 /** Uma vez por dia: mantém a janela de 90 dias de tomas, avisa receitas a acabar e limpa. */

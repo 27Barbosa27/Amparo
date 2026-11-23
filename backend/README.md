@@ -37,7 +37,7 @@ Argon2id; emails só como HMAC mais uma cópia cifrada; JWT de acesso de 15 min;
 
 **Perfis e permissões** (`/profiles`, `/perfil-ativo`): papéis `owner`/`caregiver`; uma só verificação de acesso à frente de tudo; perfil alheio responde como inexistente (404); chave de cifra própria por perfil; `GET /profiles/:id/exportacao` (portabilidade).
 
-**Medicação** (sob `/profiles/:id`): `medicamentos`, `receitas` (por intervalo ou horas fixas, gera e refaz as tomas, unidades e dias que restam). Nome, notas e dose cifrados.
+**Medicação** (sob `/profiles/:id`): `medicamentos`, `receitas` (por intervalo ou horas fixas, gera e refaz as tomas, unidades e dias que restam). `POST /receitas?assincrono=true` responde 202 e gera as tomas em segundo plano; `GET /receitas/:id/geracao` devolve os passos do ecrã de carregamento (e um trabalho retoma gerações interrompidas). Nome, notas e dose cifrados.
 
 **Tomas** (`/tomas`, serve cuidadores com `X-Profile-Id` e o telemóvel da pessoa): `GET` com `since` (delta), `GET /:id` com histórico de 7 dias, `POST /:id/registo|saltar|desfazer` (≤ 1 min), idempotência, hora real, conflitos da fila offline, "atrasada" derivada.
 

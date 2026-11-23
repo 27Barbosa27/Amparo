@@ -346,3 +346,69 @@ describe('Rotas com X-Profile-Id (mapa do plano: /receitas, /medicamentos)', () 
     expect((await request(app).post('/medicamentos').set(dev).send({ nome: 'X' })).status).toBe(403);
   });
 });
+
+describe('Geração assíncrona das tomas (ecrã de carregamento)', () => {
+  const esperarConcluida = async (c: Conta, p: string, id: string) => {
+    for (let i = 0; i < 200; i++) {
+      const g = await request(app).get(`/profiles/${p}/receitas/${id}/geracao`).set(auth(c));
+      if (g.body.estado !== 'a_gerar') return g.body;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    throw new Error('a geração nunca terminou');
+  };
+
+  it('responde 202 de imediato e as tomas aparecem em segundo plano, com os passos a seguir', async () => {
+    const a = await conta();
+    const p = await perfil(a);
+    const m = await medicamento(a, p);
+    const r = await request(app).post(`/profiles/${p}/receitas?assincrono=true`).set(auth(a)).send(corpoReceita(m));
+    expect(r.status).toBe(202);
+    expect(['a_gerar', 'concluida']).toContain(r.body.receita.geracao.estado);
+    const final = await esperarConcluida(a, p, r.body.receita.id);
+    expect(final.estado).toBe('concluida');
+    expect(final.tomasGeradas).toBeGreaterThanOrEqual(170);
+    expect(final.passos).toEqual([{ id: 'gerar_tomas', estado: 'feito' }, { id: 'sincronizar', estado: 'feito' }]);
+    const n = await db.query('select count(*)::int n from tomas where receita_id = $1', [r.body.receita.id]);
+    expect(n.rows[0].n).toBe(final.tomasGeradas);
+    expect((await request(app).get(`/profiles/${p}/receitas/${r.body.receita.id}`).set(auth(a))).body.receita.geracao.estado).toBe('concluida');
+  });
+
+  it('o modo normal continua síncrono e já traz o número de tomas', async () => {
+    const a = await conta();
+    const p = await perfil(a);
+    const m = await medicamento(a, p);
+    const r = await request(app).post(`/profiles/${p}/receitas`).set(auth(a)).send(corpoReceita(m));
+    expect(r.status).toBe(201);
+    expect(r.body.receita.geracao.estado).toBe('concluida');
+    expect(r.body.receita.geracao.tomasGeradas).toBeGreaterThanOrEqual(170);
+  });
+
+  it('uma geração que ficou a meio (servidor reiniciou) é retomada, sem duplicar tomas', async () => {
+    const { retomarGeracoes } = await import('../src/medicacao/servico.js');
+    const a = await conta();
+    const p = await perfil(a);
+    const m = await medicamento(a, p);
+    const id = await receita(a, p, m);
+    await db.query('delete from tomas where receita_id = $1', [id]);
+    await db.query("update receitas set geracao_estado = 'a_gerar', geracao_tomas = 0, criado_em = now() - interval '5 minutes' where id = $1", [id]);
+    expect((await retomarGeracoes(db)).valueOf()).toBeGreaterThanOrEqual(1);
+    const g = await request(app).get(`/profiles/${p}/receitas/${id}/geracao`).set(auth(a));
+    expect(g.body.estado).toBe('concluida');
+    expect(g.body.tomasGeradas).toBeGreaterThanOrEqual(170);
+    await retomarGeracoes(db);
+    const n = await db.query('select count(*)::int n from tomas where receita_id = $1', [id]);
+    expect(n.rows[0].n).toBe(g.body.tomasGeradas);
+  });
+
+  it('o estado da geração respeita os perfis (IDOR)', async () => {
+    const a = await conta('Ana');
+    const b = await conta('Bruno');
+    const pa = await perfil(a);
+    const pb = await perfil(b);
+    const ma = await medicamento(a, pa);
+    const ra = await receita(a, pa, ma);
+    expect((await request(app).get(`/profiles/${pa}/receitas/${ra}/geracao`).set(auth(b))).status).toBe(404);
+    expect((await request(app).get(`/profiles/${pb}/receitas/${ra}/geracao`).set(auth(b))).status).toBe(404);
+    expect((await request(app).get(`/receitas/${ra}/geracao`).set({ ...auth(b), 'X-Profile-Id': pb })).status).toBe(404);
+  });
+});
