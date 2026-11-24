@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../dominio/modelos.dart';
 import '../../estado/hoje_controlador.dart';
 import '../../tema/tokens.dart';
 import '../componentes/animacao.dart';
@@ -32,6 +33,11 @@ class SucessoMarcadaEcra extends StatelessWidget {
         final toma = controlador.tomas.firstWhere((x) => x.id == tomaId);
         final hora = horaCurta(toma.tomadaEm ?? toma.agendada);
         final nome = controlador.perfil.nome;
+        // O cuidador a tomar a sua própria medicação: não há mais ninguém a quem a marcação apareça.
+        final proprio = eProprioCuidador(
+          controlador.perfil,
+          controlador.cuidador,
+        );
         return SafeArea(
           child: Center(
             child: ConstrainedBox(
@@ -62,7 +68,9 @@ class SucessoMarcadaEcra extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '${toma.medicamento} registado às $hora, marcado por si.',
+                      proprio
+                          ? '${toma.medicamento} registado às $hora.'
+                          : '${toma.medicamento} registado às $hora, marcado por si.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 16,
@@ -71,41 +79,43 @@ class SucessoMarcadaEcra extends StatelessWidget {
                         color: t.texto2,
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    Cartao(
-                      child: Row(
-                        children: [
-                          Avatar(
-                            inicial: controlador.perfil.inicial,
-                            tamanho: 48,
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'A $nome vê esta marcação',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: t.texto,
-                                  ),
-                                ),
-                                Text(
-                                  'No ecrã dela, com o seu nome',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: t.texto2,
-                                  ),
-                                ),
-                              ],
+                    if (!proprio) ...[
+                      const SizedBox(height: 18),
+                      Cartao(
+                        child: Row(
+                          children: [
+                            Avatar(
+                              inicial: controlador.perfil.inicial,
+                              tamanho: 48,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'A $nome vê esta marcação',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: t.texto,
+                                    ),
+                                  ),
+                                  Text(
+                                    'No ecrã dela, com o seu nome',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                      color: t.texto2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                     const Spacer(),
                     Botao(
                       texto: 'Voltar à página principal',

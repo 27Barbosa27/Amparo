@@ -63,7 +63,7 @@ NovaReceita receitaJa(DateTime agora) {
     frequencia: Frequencia.cadaOitoHoras,
     hora: t.hour,
     minuto: t.minute,
-    duracao: Duracao.seteDias,
+    duracao: Duracao.umMes,
   );
 }
 

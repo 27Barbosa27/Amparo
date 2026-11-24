@@ -215,20 +215,43 @@ enum TipoMedicacao {
 /// "Com que frequência?" do formulário (ver o mapa no plano, secção 3.1).
 enum Frequencia { cadaOitoHoras, duasVezesDia, umaVezDia, outra }
 
-/// "Durante quanto tempo?" (no máximo 3 meses por geração, depois renova).
-enum Duracao { seteDias, umMes, tresMeses }
+/// "Durante quanto tempo?": um número de meses (o servidor gera as tomas por janelas e renova).
+class Duracao {
+  const Duracao(this.meses);
+  final int meses;
 
-extension DuracaoDias on Duracao {
-  int get dias => switch (this) {
-    Duracao.seteDias => 7,
-    Duracao.umMes => 30,
-    Duracao.tresMeses => 90,
-  };
-  String get texto => switch (this) {
-    Duracao.seteDias => '7 dias',
-    Duracao.umMes => '1 mês',
-    Duracao.tresMeses => '3 meses',
-  };
+  static const umMes = Duracao(1);
+  static const tresMeses = Duracao(3);
+
+  /// O máximo que o formulário aceita.
+  static const maximoMeses = 24;
+
+  /// "1 mês" ou "6 meses".
+  String get texto => meses == 1 ? '1 mês' : '$meses meses';
+
+  /// O fim: o mesmo dia, `meses` meses depois (31 de janeiro + 1 mês = 28 ou 29 de fevereiro).
+  DateTime fimDe(DateTime inicio) {
+    final total = inicio.year * 12 + (inicio.month - 1) + meses;
+    final ano = total ~/ 12;
+    final mes = total % 12 + 1;
+    final diasDoMes = DateTime(ano, mes + 1, 0).day;
+    final dia = inicio.day > diasDoMes ? diasDoMes : inicio.day;
+    return DateTime(
+      ano,
+      mes,
+      dia,
+      inicio.hour,
+      inicio.minute,
+      inicio.second,
+      inicio.millisecond,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) => other is Duracao && other.meses == meses;
+
+  @override
+  int get hashCode => meses.hashCode;
 }
 
 extension FrequenciaTexto on Frequencia {

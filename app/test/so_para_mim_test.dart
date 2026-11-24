@@ -46,4 +46,46 @@ void main() {
     expect(find.text('A minha medicação'), findsOneWidget);
     expect(find.text('Ana'), findsWidgets);
   });
+
+  testWidgets('ao marcar uma toma, nada fala de outra pessoa a ver', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final repo = RepositorioMemoria(agora: agora);
+    // o perfil "maria" é o do próprio cuidador: a conta chama-se Maria
+    await tester.pumpWidget(
+      AmparoApp(
+        repositorio: repo,
+        autenticacao: AutenticacaoMemoria(nomeFixo: 'Maria'),
+        relogio: () => agora,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'maria@exemplo.pt');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'uma-senha-segura-123',
+    );
+    await tester.tap(find.widgetWithText(InkWell, 'Entrar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirmar que tomei'), findsWidgets);
+    expect(find.textContaining('Maria tomou'), findsNothing);
+    await tester.tap(find.text('Confirmar que tomei').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Toma marcada'), findsOneWidget);
+    expect(find.textContaining('marcado por si'), findsNothing);
+    expect(find.textContaining('vê esta marcação'), findsNothing);
+    expect(find.textContaining('No ecrã dela'), findsNothing);
+
+    await tester.tap(find.text('Voltar à página principal'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Marcada por'), findsNothing);
+  });
 }

@@ -108,7 +108,10 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
   );
   late Frequencia _frequencia =
       _inicial?.frequencia ?? Frequencia.cadaOitoHoras;
-  late Duracao _duracao = _inicial?.duracao ?? Duracao.tresMeses;
+  late final _meses = TextEditingController(
+    text: '${(_inicial?.duracao ?? Duracao.tresMeses).meses}',
+  );
+  String? _erroMeses;
   late TipoMedicacao _tipo = _inicial?.tipo ?? TipoMedicacao.comprimido;
   String? _erroMedicamento, _erroDose, _erroHora, _erroOutra;
 
@@ -128,6 +131,7 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
     _dose.dispose();
     _hora.dispose();
     _horasOutra.dispose();
+    _meses.dispose();
     super.dispose();
   }
 
@@ -158,13 +162,29 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
         minuto = int.parse(h.first.substring(3));
       }
     }
+    // "Durante quanto tempo?": um número de meses (só quando se cria; ao editar a duração não muda).
+    var meses = Duracao.tresMeses.meses;
+    String? eMeses;
+    if (widget.editar == null) {
+      final n = int.tryParse(_meses.text.trim());
+      if (n == null || n < 1 || n > Duracao.maximoMeses) {
+        eMeses = 'Escreva um número de meses entre 1 e ${Duracao.maximoMeses}.';
+      } else {
+        meses = n;
+      }
+    }
     setState(() {
+      _erroMeses = eMeses;
       _erroMedicamento = eMed;
       _erroDose = eDose;
       _erroHora = eHora;
       _erroOutra = eOutra;
     });
-    if (eMed != null || eDose != null || eHora != null || eOutra != null) {
+    if (eMed != null ||
+        eDose != null ||
+        eHora != null ||
+        eOutra != null ||
+        eMeses != null) {
       return;
     }
     widget.aoContinuar(
@@ -175,7 +195,7 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
         frequencia: _frequencia,
         hora: hora,
         minuto: minuto,
-        duracao: _duracao,
+        duracao: Duracao(meses),
         horasOutra: outras,
         tipo: _tipo,
       ),
@@ -249,12 +269,28 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
           ),
         if (widget.editar == null) ...[
           const SizedBox(height: 14),
-          GrelhaOpcoes<Duracao>(
-            titulo: 'Durante quanto tempo?',
-            opcoes: Duracao.values,
-            texto: (d) => d.texto,
-            valor: _duracao,
-            aoEscolher: (d) => setState(() => _duracao = d),
+          CampoTexto(
+            rotulo: 'Durante quanto tempo?',
+            controlador: _meses,
+            teclado: TextInputType.number,
+            maxLength: 2,
+            erro: _erroMeses,
+            // A unidade fica dentro do campo, à direita: o número é sempre de meses.
+            sufixo: Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  'meses',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: context.t.texto2,
+                  ),
+                ),
+              ),
+            ),
+            aoMudar: (_) => setState(() => _erroMeses = null),
           ),
         ],
       ],

@@ -23,7 +23,7 @@ Map<String, Object?> corpoDaReceita(
     'dose': r.dose,
     'horario': horario,
     'inicio': inicio.toUtc().toIso8601String(),
-    'fim': inicio.add(Duration(days: r.duracao.dias)).toUtc().toIso8601String(),
+    'fim': r.duracao.fimDe(inicio).toUtc().toIso8601String(),
   };
 }
 

@@ -93,7 +93,7 @@ void main() {
         );
         expect(
           DateTime.parse(c['fim']! as String).toLocal(),
-          DateTime(2026, 11, 22, 8).add(const Duration(days: 90)),
+          DateTime(2027, 2, 22, 8),
         );
         expect(c['medicamentoId'], 'm1');
         expect(c['dose'], '1 comprimido');
@@ -152,11 +152,12 @@ void main() {
       },
     );
 
-    test('a duração define o fim: 7 dias, 1 mês (30) e 3 meses (90)', () {
-      for (final (d, dias) in [
-        (Duracao.seteDias, 7),
-        (Duracao.umMes, 30),
-        (Duracao.tresMeses, 90),
+    test('a duração em meses define o fim, no mesmo dia do mês', () {
+      for (final (meses, fim) in [
+        (1, DateTime(2026, 12, 21, 13)),
+        (3, DateTime(2027, 2, 21, 13)),
+        (6, DateTime(2027, 5, 21, 13)),
+        (14, DateTime(2028, 1, 21, 13)),
       ]) {
         final r = NovaReceita(
           medicamento: 'X',
@@ -164,13 +165,24 @@ void main() {
           frequencia: Frequencia.umaVezDia,
           hora: 8,
           minuto: 0,
-          duracao: d,
+          duracao: Duracao(meses),
         );
         final c = corpoDaReceita(r, 'm', agora);
-        final diferenca = DateTime.parse(c['fim']! as String)
-            .difference(DateTime.parse(c['inicio']! as String));
-        expect(diferenca, Duration(days: dias));
+        expect(DateTime.parse(c['fim']! as String).toLocal(), fim);
       }
+    });
+
+    test('um mês a partir do dia 31 acaba no último dia do mês seguinte', () {
+      expect(
+        Duracao.umMes.fimDe(DateTime(2027, 1, 31, 9)),
+        DateTime(2027, 2, 28, 9),
+      );
+      expect(
+        Duracao.umMes.fimDe(DateTime(2028, 1, 31, 9)),
+        DateTime(2028, 2, 29, 9),
+      );
+      expect(Duracao(1).texto, '1 mês');
+      expect(Duracao(6).texto, '6 meses');
     });
 
     test('lerHoras aceita várias formas e recusa o que não é hora', () {
@@ -303,7 +315,7 @@ void main() {
         await tester.tap(find.text('1 vez ao dia'));
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).at(2), '21:00');
-        await tester.tap(find.text('3 meses'));
+        await tester.enterText(find.byType(TextField).at(3), '3');
         await tester.pumpAndSettle();
         await tester.tap(find.text('Criar tomas e alarmes'));
         await tester.pumpAndSettle();

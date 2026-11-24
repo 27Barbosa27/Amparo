@@ -247,6 +247,11 @@ class _Erro extends StatelessWidget {
   }
 }
 
+/// "1 tomada" / "3 tomadas".
+String _tomadas(int n) => '$n ${n == 1 ? 'tomada' : 'tomadas'}';
+
+/// O resumo do dia, compacto: o anel (quantas já foram), uma frase com o que falta e os últimos 7 dias
+/// com a inicial de cada dia.
 class _ResumoDia extends StatelessWidget {
   const _ResumoDia({required this.resumo, required this.semana});
   final ResumoDia resumo;
@@ -259,9 +264,18 @@ class _ResumoDia extends StatelessWidget {
     final visiveis = semana
         .skipWhile((d) => d.resultado == ResultadoDia.semDados)
         .toList();
+    final faltas = <InlineSpan>[
+      if (r.porConfirmar > 0)
+        TextSpan(
+          text: '${r.porConfirmar} por confirmar',
+          style: TextStyle(color: t.avisoTexto, fontWeight: FontWeight.w800),
+        ),
+      if (r.porConfirmar > 0 && r.porTomar > 0) const TextSpan(text: '  ·  '),
+      if (r.porTomar > 0) TextSpan(text: '${r.porTomar} por tomar'),
+    ];
     return Cartao(
       raio: 5,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       child: Semantics(
         container: true,
         label: 'Resumo do dia',
@@ -274,8 +288,8 @@ class _ResumoDia extends StatelessWidget {
                   label:
                       '${r.tomadas} tomas feitas, ${r.porConfirmar} por confirmar, ${r.porTomar} por tomar, de ${r.total}',
                   child: SizedBox(
-                    width: 72,
-                    height: 72,
+                    width: 84,
+                    height: 84,
                     child: AnimarComAtraso(
                       atraso: const Duration(milliseconds: 300),
                       duracao: const Duration(seconds: 1),
@@ -292,7 +306,7 @@ class _ResumoDia extends StatelessWidget {
                             child: Text(
                               '${r.tomadas}/${r.total}',
                               style: TextStyle(
-                                fontSize: 20,
+                                fontSize: 22,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.6,
                                 color: t.texto,
@@ -304,59 +318,45 @@ class _ResumoDia extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 18),
+                const SizedBox(width: 16),
                 Expanded(
-                  child: Column(
-                    children: [
-                      itemQueSobe(
-                        0,
-                        _LinhaResumo(
-                          selo: SeloIcone(
-                            cor: t.ok,
-                            dados: Icones.visto,
-                            corIcone: t.superficie,
+                  child: itemQueSobe(
+                    0,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          r.total > 0 && r.tomadas == r.total
+                              ? 'Tudo tomado'
+                              : _tomadas(r.tomadas),
+                          style: TextStyle(
+                            fontSize: 18,
+                            height: 1.2,
+                            fontWeight: FontWeight.w800,
+                            color: r.tomadas > 0 ? t.okTexto : t.texto,
                           ),
-                          n: r.tomadas,
-                          texto: 'tomadas',
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      itemQueSobe(
-                        1,
-                        _LinhaResumo(
-                          selo: SeloIcone(
-                            cor: t.aviso,
-                            dados: Icones.alerta,
-                            corIcone: Tokens.sobreAviso,
+                        if (faltas.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text.rich(
+                            TextSpan(children: faltas),
+                            style: TextStyle(
+                              fontSize: 15,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                              color: t.texto2,
+                            ),
                           ),
-                          n: r.porConfirmar,
-                          texto: 'por confirmar',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      itemQueSobe(
-                        2,
-                        _LinhaResumo(
-                          selo: SeloIcone(
-                            cor: t.superficie2,
-                            dados: Icones.relogio,
-                            corIcone: t.texto2,
-                            contorno: t.linha,
-                            tamanhoIcone: 14,
-                            traco: 2.6,
-                          ),
-                          n: r.porTomar,
-                          texto: 'por tomar',
-                        ),
-                      ),
-                    ],
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.only(top: 10),
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: t.linha)),
               ),
@@ -381,12 +381,12 @@ class _ResumoDia extends StatelessWidget {
                         Flexible(
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 2,
+                              horizontal: 10,
+                              vertical: 1,
                             ),
                             decoration: BoxDecoration(
                               color: t.okSuave,
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(5),
                             ),
                             child: Text(
                               '$p% de adesão',
@@ -415,13 +415,17 @@ class _ResumoDia extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Com os 7 dias, sete colunas iguais com a bolinha centrada em cada (como no design). Numa
-                  // conta nova só há as bolinhas dos dias que existem, encostadas à esquerda, alinhadas com o
-                  // título: os dias antes de a conta existir não são "vazios", não existem.
-                  if (visiveis.length == 7)
-                    Row(
-                      children: [
-                        for (final (i, d) in visiveis.indexed)
+                  // Sete colunas iguais, cada uma com a bolinha e a inicial do dia por baixo. Numa conta
+                  // nova só há os dias que existem, encostados à esquerda: os de antes não são "vazios".
+                  Row(
+                    mainAxisAlignment: visiveis.length == 7
+                        ? MainAxisAlignment.spaceBetween
+                        : MainAxisAlignment.start,
+                    children: [
+                      for (final (i, d) in visiveis.indexed) ...[
+                        if (i > 0 && visiveis.length != 7)
+                          const SizedBox(width: 18),
+                        if (visiveis.length == 7)
                           Expanded(
                             child: Center(
                               child: itemQueSobe(
@@ -432,14 +436,8 @@ class _ResumoDia extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    )
-                  else
-                    Row(
-                      children: [
-                        for (final (i, d) in visiveis.indexed) ...[
-                          if (i > 0) const SizedBox(width: 16),
+                          )
+                        else
                           itemQueSobe(
                             i,
                             _PontoDia(
@@ -447,9 +445,9 @@ class _ResumoDia extends StatelessWidget {
                               dia: d,
                             ),
                           ),
-                        ],
                       ],
-                    ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -460,48 +458,8 @@ class _ResumoDia extends StatelessWidget {
   }
 }
 
-class _LinhaResumo extends StatelessWidget {
-  const _LinhaResumo({
-    required this.selo,
-    required this.n,
-    required this.texto,
-  });
-  final Widget selo;
-  final int n;
-  final String texto;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.t;
-    return Row(
-      children: [
-        selo,
-        const SizedBox(width: 10),
-        // No design o `<strong>` e o texto são dois itens de uma linha com `gap: 10px`.
-        Text(
-          '$n',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            color: t.texto,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            texto,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: t.texto,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
+/// Um dia dos últimos 7: a bolinha do resultado e, por baixo, a inicial do dia ("S", "T", "Q"...).
+/// Hoje (em curso) é um contorno neutro com a inicial a negrito, não um aviso.
 class _PontoDia extends StatelessWidget {
   const _PontoDia({super.key, required this.dia});
   final DiaAdesao dia;
@@ -510,22 +468,20 @@ class _PontoDia extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.t;
     final nome = DateFormat('EEEE', 'pt_PT').format(dia.dia);
-    return switch (dia.resultado) {
-      ResultadoDia.tudoTomado => Semantics(
-        label: '$nome: tudo tomado',
-        child: SeloIcone(
-          cor: t.ok,
-          dados: Icones.visto,
-          corIcone: t.superficie,
-        ),
+    final inicial = nome.substring(0, 1).toUpperCase();
+    final hoje = dia.resultado == ResultadoDia.emCurso;
+    final (rotulo, Widget ponto) = switch (dia.resultado) {
+      ResultadoDia.tudoTomado => (
+        '$nome: tudo tomado',
+        SeloIcone(cor: t.ok, dados: Icones.visto, corIcone: t.superficie),
       ),
-      ResultadoDia.esquecida => Semantics(
-        label: '$nome: uma toma esquecida',
-        child: SeloIcone(cor: t.mau, dados: Icones.x, corIcone: t.superficie),
+      ResultadoDia.esquecida => (
+        '$nome: uma toma esquecida',
+        SeloIcone(cor: t.mau, dados: Icones.x, corIcone: t.superficie),
       ),
-      ResultadoDia.semDados => Semantics(
-        label: '$nome: sem registos',
-        child: Container(
+      ResultadoDia.semDados => (
+        '$nome: sem registos',
+        Container(
           width: 24,
           height: 24,
           decoration: BoxDecoration(
@@ -535,18 +491,38 @@ class _PontoDia extends StatelessWidget {
           ),
         ),
       ),
-      ResultadoDia.emCurso => Semantics(
-        label: '$nome, hoje: em curso',
-        child: Container(
+      ResultadoDia.emCurso => (
+        '$nome, hoje: em curso',
+        Container(
           width: 24,
           height: 24,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: t.aviso, width: 3),
+            border: Border.all(color: t.texto2, width: 2.5),
           ),
         ),
       ),
     };
+    return Semantics(
+      label: rotulo,
+      excludeSemantics: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ponto,
+          const SizedBox(height: 3),
+          Text(
+            inicial,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.2,
+              fontWeight: hoje ? FontWeight.w800 : FontWeight.w600,
+              color: hoje ? t.texto : t.texto2,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -753,7 +729,8 @@ class _ItemTempo extends StatelessWidget {
     final Widget cartao;
     if (toma.estado == EstadoToma.tomada) {
       selo = SeloIcone(cor: t.ok, dados: Icones.visto, corIcone: t.superficie);
-      final quem = toma.registadaPor == null
+      // "Marcada por Ana" só faz sentido quando quem marcou não é a própria pessoa.
+      final quem = toma.registadaPor == null || proprio
           ? ''
           : ' · Marcada por ${toma.registadaPor}';
       cartao = _CartaoToma(
@@ -846,13 +823,12 @@ class _ItemTempo extends StatelessWidget {
         detalhe: detalhe,
         hora: hora,
         icone: icone,
-        heroi: true,
-        fundo: t.heroi,
+        pisca: true,
+        fundo: t.superficie,
         corTile: t.primariaSuave,
         corIcone: t.sobrePrimariaSuave,
-        corTexto: t.sobreHeroi,
-        corDetalhe: t.sobreHeroi2,
         linha: naHora ? 'É a hora desta toma' : 'Faltam $faltam',
+        corLinha: t.primaria,
         botoes: !naHora
             ? const []
             : [
@@ -873,8 +849,8 @@ class _ItemTempo extends StatelessWidget {
                           texto: 'Ligar a $nome',
                           icone: Icones.telefone,
                           tracoIcone: 2,
-                          fundo: const Color(0xFFFFFFFF),
-                          cor: const Color(0xFF0B3B37),
+                          fundo: t.primariaSuave,
+                          cor: t.sobrePrimariaSuave,
                           peso: FontWeight.w800,
                           aoTocar: () => aoLigar != null
                               ? aoLigar!(toma)
@@ -887,9 +863,9 @@ class _ItemTempo extends StatelessWidget {
                           texto: 'Lembrar $nome',
                           icone: Icones.sino,
                           tracoIcone: 2,
-                          fundo: const Color(0x14FFFFFF),
-                          cor: const Color(0xFFFFFFFF),
-                          contorno: const Color(0xB3FFFFFF),
+                          fundo: Colors.transparent,
+                          cor: t.texto,
+                          contorno: t.linha,
                           peso: FontWeight.w700,
                           aoTocar: () => aoLembrar != null
                               ? aoLembrar!(toma)
@@ -963,9 +939,8 @@ class _CartaoToma extends StatelessWidget {
     required this.corIcone,
     required this.linha,
     this.corTexto,
-    this.corDetalhe,
     this.corLinha,
-    this.heroi = false,
+    this.pisca = false,
     this.apagada = false,
     this.botoes = const [],
     this.aoAbrirDetalhe,
@@ -979,9 +954,10 @@ class _CartaoToma extends StatelessWidget {
   final Color corIcone;
   final String linha;
   final Color? corTexto;
-  final Color? corDetalhe;
   final Color? corLinha;
-  final bool heroi;
+
+  /// O contorno verde pisca devagar (a próxima toma a tomar).
+  final bool pisca;
   final bool apagada;
   final List<Widget> botoes;
   final VoidCallback? aoAbrirDetalhe;
@@ -1026,7 +1002,7 @@ class _CartaoToma extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: corDetalhe ?? t.texto2,
+                    color: t.texto2,
                   ),
                 ),
               ],
@@ -1039,7 +1015,7 @@ class _CartaoToma extends StatelessWidget {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w800,
-            color: heroi ? t.sobreHeroi : texto,
+            color: texto,
           ),
         ),
         if (aoAbrirDetalhe != null) ...[
@@ -1048,7 +1024,7 @@ class _CartaoToma extends StatelessWidget {
         ],
       ],
     );
-    return Cartao(
+    final cartao = Cartao(
       raio: 5,
       cor: fundo,
       padding: const EdgeInsets.all(14),
@@ -1074,6 +1050,81 @@ class _CartaoToma extends StatelessWidget {
           for (final b in botoes) ...[const SizedBox(height: 8), b],
         ],
       ),
+    );
+    return pisca
+        ? _ContornoQuePisca(raio: 5, cor: t.primaria, child: cartao)
+        : cartao;
+  }
+}
+
+/// Um contorno que respira: a opacidade sobe e desce devagar (2,6 s por ciclo, `ease-in-out`). Com "reduzir
+/// movimento" fica fixo e visível.
+class _ContornoQuePisca extends StatefulWidget {
+  const _ContornoQuePisca({
+    required this.raio,
+    required this.cor,
+    required this.child,
+  });
+  final double raio;
+  final Color cor;
+  final Widget child;
+
+  @override
+  State<_ContornoQuePisca> createState() => _ContornoQuePiscaState();
+}
+
+class _ContornoQuePiscaState extends State<_ContornoQuePisca>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1300),
+  );
+  bool _iniciada = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_iniciada) return;
+    _iniciada = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _c.value = 1;
+    } else {
+      _c.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ExcludeSemantics(
+              child: AnimatedBuilder(
+                animation: _c,
+                builder: (context, _) => DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(widget.raio),
+                    border: Border.all(
+                      width: 2.5,
+                      color: widget.cor.withValues(
+                        alpha: .15 + .85 * Curves.easeInOut.transform(_c.value),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
