@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -5,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'dados/api.dart';
 import 'dados/autenticacao.dart';
+import 'dados/google.dart';
 import 'dados/ligacao.dart';
 import 'dados/repositorio.dart';
 import 'dominio/modelos.dart';
@@ -40,7 +42,11 @@ class AmparoApp extends StatefulWidget {
     this.telaInicial = '',
     this.credenciaisDev,
     this.ligacao,
+    this.google,
   });
+
+  /// "Entrar com a Google". Nulo: o botão avisa que ainda não está disponível.
+  final EntradaGoogle? google;
 
   /// O telemóvel de uma pessoa acompanhada (liga-se com um código, sem conta). Nulo: não se oferece.
   final LigacaoDispositivo? ligacao;
@@ -79,7 +85,91 @@ class _AmparoAppState extends State<AmparoApp> {
   @override
   void initState() {
     super.initState();
+    // No browser a credencial chega pelo botão do próprio Google.
+    _googleEventos = widget.google?.eventos.listen(_credencialGoogle);
     _arrancar();
+  }
+
+  StreamSubscription<CredencialGoogle>? _googleEventos;
+
+  /// Nos telemóveis: abre a folha de contas da Google e entra com o que ela devolver.
+  Future<void> _entrarComGoogle(BuildContext context) async {
+    final google = widget.google;
+    if (google == null || !google.configurado) {
+      _aviso(
+        context,
+        'Entrar com a Google ainda não está configurado (falta o ID de cliente).',
+      );
+      return;
+    }
+    final r = await google.entrar();
+    if (r.credencial != null) {
+      await _credencialGoogle(r.credencial!);
+    } else if (r.erro != null && r.erro != 'cancelado') {
+      final ctx = _navegador.currentContext;
+      if (ctx != null && ctx.mounted) _aviso(ctx, _mensagemGoogle(r.erro!));
+    }
+  }
+
+  static String _mensagemGoogle(String codigo) => switch (codigo) {
+    'sem_rede' =>
+      'Sem ligação à internet. Verifique a ligação e tente outra vez.',
+    'demasiadas_tentativas' =>
+      'Demasiadas tentativas. Espere um pouco e tente outra vez.',
+    'provedor_nao_configurado' =>
+      'A entrada com a Google ainda não está ligada no servidor.',
+    'google_indisponivel' =>
+      'A entrada com a Google não está disponível neste dispositivo.',
+    _ => 'Não foi possível entrar com a Google. Tente outra vez.',
+  };
+
+  /// Entra no servidor com o ID token. Numa conta nova pede primeiro o consentimento (dados de saúde).
+  Future<void> _credencialGoogle(
+    CredencialGoogle c, {
+    bool aceitaTermos = false,
+  }) async {
+    final erro = await widget.autenticacao.entrarComGoogle(
+      c.idToken,
+      c.nonce,
+      nome: c.nome,
+      aceitaTermos: aceitaTermos,
+    );
+    final ctx = _navegador.currentContext;
+    if (!mounted || ctx == null || !ctx.mounted) return;
+    if (erro == 'consentimento_necessario') {
+      final aceite = await showDialog<bool>(
+        context: ctx,
+        builder: (d) => AlertDialog(
+          title: const Text('Criar conta com a Google'),
+          content: const Text(
+            'Ainda não existe uma conta Amparo para este email. Para a criar, tem de aceitar os Termos, a Política de Privacidade e o tratamento dos dados de saúde para gerir as tomas.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(d).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(d).pop(true),
+              child: const Text('Aceitar e criar conta'),
+            ),
+          ],
+        ),
+      );
+      if (aceite == true) await _credencialGoogle(c, aceitaTermos: true);
+      return;
+    }
+    if (erro != null) {
+      _aviso(ctx, _mensagemGoogle(erro));
+      return;
+    }
+    try {
+      await _abrirSessao();
+    } on ErroApi catch (e) {
+      if (ctx.mounted) _aviso(ctx, _mensagemGoogle(e.codigo));
+      return;
+    }
+    _navegador.currentState?.popUntil((r) => r.isFirst);
   }
 
   /// Retoma a sessão guardada, se houver; em desenvolvimento pode abrir direto num ecrã.
@@ -361,10 +451,8 @@ class _AmparoAppState extends State<AmparoApp> {
               ctx,
               'Registar com a Apple liga-se quando a conta Apple Developer estiver configurada.',
             ),
-            aoGoogle: () => _aviso(
-              ctx,
-              'Registar com a Google liga-se quando o projeto Google estiver configurado.',
-            ),
+            aoGoogle: () => _entrarComGoogle(ctx),
+            googleWeb: widget.google?.botaoWeb(),
             aoCriar: (nome, email, senha) async {
               final erro = await widget.autenticacao.registar(
                 nome,
@@ -517,6 +605,31 @@ class _AmparoAppState extends State<AmparoApp> {
     if (context.mounted) _aviso(context, 'Receita apagada.');
   }
 
+  /// "Usar só para mim": cria o perfil do próprio cuidador de uma vez, sem formulários (os alarmes tocam
+  /// no seu telemóvel). Mais tarde pode sempre acompanhar mais pessoas.
+  Future<void> _usarSoParaMim(BuildContext context) async {
+    final nome = (widget.autenticacao.nome ?? '').trim();
+    try {
+      final eu = await widget.repositorio.criarPessoa(
+        NovaPessoa(
+          nome: nome.isEmpty ? 'Eu' : nome,
+          alarmesEm: AlarmesEm.cuidador,
+          tamanhoTexto: TamanhoTexto.normal,
+        ),
+      );
+      _perfis = await widget.repositorio.perfis();
+      _modo = _Modo.cuidador;
+      _separador = 0;
+      _abrirPerfil(eu);
+    } on ErroApi catch (e) {
+      if (context.mounted) _aviso(context, ErroGuardarEcra.mensagem(e.codigo));
+    } catch (_) {
+      if (context.mounted) {
+        _aviso(context, ErroGuardarEcra.mensagem('falha_ao_guardar'));
+      }
+    }
+  }
+
   /// "Adicionar pessoa": cria o perfil, passa a acompanhá-lo e mostra o resultado.
   void _adicionarPessoa(BuildContext context) {
     Navigator.of(context).push(
@@ -561,6 +674,7 @@ class _AmparoAppState extends State<AmparoApp> {
 
   @override
   void dispose() {
+    _googleEventos?.cancel();
     _controlador?.dispose();
     _receitas?.dispose();
     super.dispose();
@@ -602,6 +716,7 @@ class _AmparoAppState extends State<AmparoApp> {
         return const Center(child: CircularProgressIndicator());
       case _Modo.semPessoas:
         return _SemPessoas(
+          aoSoParaMim: () => _usarSoParaMim(context),
           aoAdicionar: () => _adicionarPessoa(context),
           aoTerminarSessao: _terminarSessao,
         );
@@ -615,10 +730,8 @@ class _AmparoAppState extends State<AmparoApp> {
             context,
             'Entrar com a Apple liga-se quando a conta Apple Developer estiver configurada.',
           ),
-          aoGoogle: () => _aviso(
-            context,
-            'Entrar com a Google liga-se quando o projeto Google estiver configurado.',
-          ),
+          aoGoogle: () => _entrarComGoogle(context),
+          googleWeb: widget.google?.botaoWeb(),
           aoTerCodigo: () => _terCodigo(context),
           aoCriarConta: () => _criarConta(context),
           aoEsquecerSenha: () => _recuperarSenha(context),
@@ -1019,9 +1132,11 @@ class _ContornoTracejado extends CustomPainter {
 /// Entrou, mas ainda não há ninguém para acompanhar.
 class _SemPessoas extends StatelessWidget {
   const _SemPessoas({
+    required this.aoSoParaMim,
     required this.aoAdicionar,
     required this.aoTerminarSessao,
   });
+  final VoidCallback aoSoParaMim;
   final VoidCallback aoAdicionar;
   final VoidCallback aoTerminarSessao;
 
@@ -1040,22 +1155,36 @@ class _SemPessoas extends StatelessWidget {
               children: [
                 Semantics(
                   header: true,
-                  child: Text('Quem vai acompanhar?', style: Estilos.titulo(t)),
+                  child: Text(
+                    'Para quem é o Amparo?',
+                    style: Estilos.titulo(t),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Cartao(
                   child: Text(
-                    'Ainda não adicionou ninguém. Comece por adicionar a primeira pessoa.',
+                    'Pode usá-lo só para si, para os seus medicamentos, ou acompanhar outra pessoa. Pode fazer as duas coisas.',
                     style: Estilos.corpo(t),
                   ),
                 ),
                 const SizedBox(height: 16),
                 Botao(
-                  texto: 'Adicionar pessoa',
+                  texto: 'Usar só para mim',
+                  icone: Icons.person,
+                  altura: 56,
+                  raio: 20,
+                  tamanhoTexto: 17,
+                  aoTocar: aoSoParaMim,
+                ),
+                const SizedBox(height: 10),
+                Botao(
+                  texto: 'Acompanhar outra pessoa',
                   icone: Icons.add,
                   altura: 56,
                   raio: 20,
                   tamanhoTexto: 17,
+                  fundo: t.primariaSuave,
+                  cor: t.sobrePrimariaSuave,
                   aoTocar: aoAdicionar,
                 ),
                 const SizedBox(height: 10),

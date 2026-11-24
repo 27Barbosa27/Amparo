@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'app.dart';
 import 'dados/api.dart';
 import 'dados/autenticacao.dart';
+import 'dados/google.dart';
 import 'dados/ligacao.dart';
 import 'dados/repositorio_api.dart';
 import 'dados/sessao_segura.dart';
@@ -16,6 +17,11 @@ import 'dados/sessao_segura.dart';
 /// A app não traz dados de exemplo: tudo vem da API.
 const _apiUrl = String.fromEnvironment('API_URL');
 const _tela = String.fromEnvironment('TELA');
+
+/// O ID de cliente "Aplicação Web" do Google Cloud (--dart-define=GOOGLE_CLIENT_ID=...). Sem ele, o botão
+/// da Google avisa que ainda não está configurado. `GOOGLE_CLIENT_ID_IOS` é o ID de cliente iOS (só no iPhone).
+const _googleClientId = String.fromEnvironment('GOOGLE_CLIENT_ID');
+const _googleClientIdIos = String.fromEnvironment('GOOGLE_CLIENT_ID_IOS');
 const _devEmail = String.fromEnvironment('DEV_EMAIL');
 const _devSenha = String.fromEnvironment('DEV_SENHA');
 
@@ -49,6 +55,10 @@ Future<void> main() async {
           ? _tela
           : (kIsWeb ? Uri.base.queryParameters['tela'] ?? '' : ''),
       ligacao: LigacaoApi(api),
+      google: EntradaGoogleReal(
+        clientId: _googleClientId,
+        clientIdIos: _googleClientIdIos,
+      ),
       credenciaisDev: credenciais,
     ),
   );

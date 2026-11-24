@@ -13,9 +13,17 @@ const _svgGoogle =
 /// "Entrar com a Apple" e "Entrar com a Google", lado a lado como no design.
 /// A Apple exige que os dois apareçam juntos. O botão da Apple é branco com o logótipo preto.
 class BotoesSso extends StatelessWidget {
-  const BotoesSso({super.key, required this.aoApple, required this.aoGoogle});
+  const BotoesSso({
+    super.key,
+    required this.aoApple,
+    required this.aoGoogle,
+    this.googleWeb,
+  });
   final VoidCallback aoApple;
   final VoidCallback aoGoogle;
+
+  /// No browser, o botão que o próprio Google desenha (único modo de entrar pelo Google na web).
+  final Widget? googleWeb;
 
   @override
   Widget build(BuildContext context) {
@@ -34,15 +42,41 @@ class BotoesSso extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _Sso(
-            rotulo: 'Google',
-            descricao: 'Entrar com Google',
-            svg: _svgGoogle,
-            fundo: t.superficie,
-            cor: t.texto,
-            contorno: t.linha,
-            aoTocar: aoGoogle,
-          ),
+          child: googleWeb != null
+              // No browser o Google só aceita o clique no botão dele. Fica por baixo, a toda a largura, e por
+              // cima desenha-se o botão da app (igual ao da Apple): o toque atravessa-o e chega ao do Google.
+              ? SizedBox(
+                  height: 52,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: googleWeb,
+                      ),
+                      IgnorePointer(
+                        child: _Sso(
+                          rotulo: 'Google',
+                          descricao: 'Entrar com Google',
+                          svg: _svgGoogle,
+                          fundo: t.superficie,
+                          cor: t.texto,
+                          contorno: t.linha,
+                          aoTocar: () {},
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : _Sso(
+                  rotulo: 'Google',
+                  descricao: 'Entrar com Google',
+                  svg: _svgGoogle,
+                  fundo: t.superficie,
+                  cor: t.texto,
+                  contorno: t.linha,
+                  aoTocar: aoGoogle,
+                ),
         ),
       ],
     );

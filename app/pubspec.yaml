@@ -40,6 +40,8 @@ dependencies:
   flutter_svg: ^2.5.0
   http: ^1.6.0
   flutter_secure_storage: ^11.2.0
+  google_sign_in: ^7.2.0
+  google_sign_in_web: ^1.1.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -9,6 +9,16 @@ abstract class Autenticacao {
   /// (`email_ja_existe`, `pedido_invalido`, `sem_rede`...) ou nulo se correu bem.
   Future<String?> registar(String nome, String email, String senha);
 
+  /// Entra (ou cria a conta) com o ID token da Google. Se a conta é nova e `aceitaTermos` é falso, devolve
+  /// `consentimento_necessario`: a app pede o consentimento e repete. Outros erros: `provedor_invalido`,
+  /// `provedor_nao_configurado`, `sem_rede`...
+  Future<String?> entrarComGoogle(
+    String idToken,
+    String nonce, {
+    String? nome,
+    bool aceitaTermos = false,
+  });
+
   /// Tenta retomar a sessão guardada. Verdadeiro se há sessão válida.
   Future<bool> restaurar();
 
@@ -45,6 +55,36 @@ class AutenticacaoApi implements Autenticacao {
         'POST',
         '/auth/login',
         corpo: {'email': email, 'senha': senha},
+        autenticado: false,
+      );
+      await _api.sessao.guardar(
+        acesso: j!['accessToken'] as String,
+        renovacao: j['refreshToken'] as String,
+      );
+      _nome = (j['utilizador'] as Map)['nome'] as String?;
+      return null;
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+  }
+
+  @override
+  Future<String?> entrarComGoogle(
+    String idToken,
+    String nonce, {
+    String? nome,
+    bool aceitaTermos = false,
+  }) async {
+    try {
+      final j = await _api.pedir(
+        'POST',
+        '/auth/google',
+        corpo: {
+          'idToken': idToken,
+          'nonce': nonce,
+          if (nome != null && nome.trim().isNotEmpty) 'nome': nome.trim(),
+          if (aceitaTermos) 'aceitaTermos': true,
+        },
         autenticado: false,
       );
       await _api.sessao.guardar(

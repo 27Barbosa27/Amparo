@@ -27,6 +27,29 @@ class AutenticacaoMemoria implements Autenticacao {
   String tokenValido = '482915';
   String? senhaReposta;
 
+  /// Contas Google já conhecidas pelo servidor falso; as outras precisam de consentimento.
+  final contasGoogleExistentes = <String>{};
+  final entradasGoogle = <({String idToken, bool aceitaTermos})>[];
+  String? erroGoogle;
+
+  @override
+  Future<String?> entrarComGoogle(
+    String idToken,
+    String nonce, {
+    String? nome,
+    bool aceitaTermos = false,
+  }) async {
+    entradasGoogle.add((idToken: idToken, aceitaTermos: aceitaTermos));
+    if (erroGoogle != null) return erroGoogle;
+    if (!contasGoogleExistentes.contains(idToken) && !aceitaTermos) {
+      return 'consentimento_necessario';
+    }
+    contasGoogleExistentes.add(idToken);
+    _dentro = true;
+    _nomeRegisto = nome ?? nomeFixo;
+    return null;
+  }
+
   @override
   Future<String?> pedirRecuperacao(String email) async {
     pedidosDeRecuperacao.add(email);

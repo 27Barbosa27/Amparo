@@ -499,11 +499,11 @@ void main() {
       await abrir(tester, RepositorioMemoria(agora: agora, vazio: true));
       expect(
         find.text(
-          'Ainda não adicionou ninguém. Comece por adicionar a primeira pessoa.',
+          'Pode usá-lo só para si, para os seus medicamentos, ou acompanhar outra pessoa. Pode fazer as duas coisas.',
         ),
         findsOneWidget,
       );
-      await tester.tap(find.widgetWithText(InkWell, 'Adicionar pessoa'));
+      await tester.tap(find.widgetWithText(InkWell, 'Acompanhar outra pessoa'));
       await tester.pumpAndSettle();
       expect(find.text('Nome ou apelido'), findsOneWidget);
     });

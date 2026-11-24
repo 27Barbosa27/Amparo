@@ -50,6 +50,7 @@ class CriarContaEcra extends StatefulWidget {
     required this.aoEntrar,
     this.aoApple,
     this.aoGoogle,
+    this.googleWeb,
   });
 
   /// Devolve o código de erro (`email_ja_existe`, `sem_rede`...) ou nulo se a conta foi criada.
@@ -60,6 +61,9 @@ class CriarContaEcra extends StatefulWidget {
   final VoidCallback aoEntrar;
   final VoidCallback? aoApple;
   final VoidCallback? aoGoogle;
+
+  /// No browser, o botão do próprio Google.
+  final Widget? googleWeb;
 
   @override
   State<CriarContaEcra> createState() => _CriarContaEcraState();
@@ -348,6 +352,7 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
         BotoesSso(
           aoApple: widget.aoApple ?? () {},
           aoGoogle: widget.aoGoogle ?? () {},
+          googleWeb: widget.googleWeb,
         ),
       ],
       espacoRodape: 12,

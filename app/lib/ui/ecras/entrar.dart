@@ -19,6 +19,7 @@ class EntrarEcra extends StatefulWidget {
     this.aoEsquecerSenha,
     this.aoApple,
     this.aoGoogle,
+    this.googleWeb,
     this.erroInicial,
   });
 
@@ -29,6 +30,9 @@ class EntrarEcra extends StatefulWidget {
   final VoidCallback? aoEsquecerSenha;
   final VoidCallback? aoApple;
   final VoidCallback? aoGoogle;
+
+  /// No browser, o botão do próprio Google.
+  final Widget? googleWeb;
 
   /// Para mostrar o ecrã já em estado de erro (capturas e testes).
   final String? erroInicial;
@@ -251,6 +255,7 @@ class _EntrarEcraState extends State<EntrarEcra> {
       BotoesSso(
         aoApple: widget.aoApple ?? () {},
         aoGoogle: widget.aoGoogle ?? () {},
+        googleWeb: widget.googleWeb,
       ),
       Pressionavel(
         child: InkWell(

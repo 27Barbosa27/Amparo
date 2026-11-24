@@ -314,7 +314,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           find.text(
-            'Ainda não adicionou ninguém. Comece por adicionar a primeira pessoa.',
+            'Pode usá-lo só para si, para os seus medicamentos, ou acompanhar outra pessoa. Pode fazer as duas coisas.',
           ),
           findsOneWidget,
         );
