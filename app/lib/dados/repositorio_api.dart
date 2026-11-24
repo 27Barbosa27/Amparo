@@ -57,7 +57,11 @@ class RepositorioApi implements Repositorio {
     final j = await _api.pedir('GET', '/profiles');
     return [
       for (final p in (j!['perfis'] as List))
-        Perfil(id: p['id'] as String, nome: p['pseudonimo'] as String),
+        Perfil(
+          id: p['id'] as String,
+          nome: p['pseudonimo'] as String,
+          tamanhoTexto: TamanhoTexto.daApi(p['tamanhoTexto']),
+        ),
     ];
   }
 
@@ -165,6 +169,10 @@ class RepositorioApi implements Repositorio {
                 t.agendada.month == dia.month &&
                 t.agendada.day == dia.day,
           );
+          // Sem tomas nesse dia (a conta ou a receita ainda não existiam): não há nada a avaliar.
+          if (doDia.isEmpty) {
+            return DiaAdesao(dia: dia, resultado: ResultadoDia.semDados);
+          }
           // Um dia só conta como "tudo tomado" se nenhuma toma ficou por fazer (pendente já passada, ou falhada).
           final esquecida = doDia.any(
             (t) =>
@@ -179,6 +187,29 @@ class RepositorioApi implements Repositorio {
           );
         }(),
     ];
+  }
+
+  @override
+  Future<CodigoLigacao> criarCodigoLigacao(String perfilId) async {
+    final j = await _api.pedir('POST', '/profiles/$perfilId/pairing-codes');
+    return CodigoLigacao(
+      id: j!['id'] as String,
+      codigo: j['codigo'] as String,
+      expiraEm: _data(j['expiraEm']),
+    );
+  }
+
+  @override
+  Future<EstadoCodigo> estadoCodigo(String perfilId, String codigoId) async {
+    final j = await _api.pedir(
+      'GET',
+      '/profiles/$perfilId/pairing-codes/$codigoId',
+    );
+    return switch (j!['estado']) {
+      'ligado' => EstadoCodigo.ligado,
+      'expirado' => EstadoCodigo.expirado,
+      _ => EstadoCodigo.aEspera,
+    };
   }
 
   @override
@@ -215,7 +246,11 @@ class RepositorioApi implements Repositorio {
       },
     );
     final p = j!['perfil'] as Map<String, dynamic>;
-    return Perfil(id: p['id'] as String, nome: p['pseudonimo'] as String);
+    return Perfil(
+      id: p['id'] as String,
+      nome: p['pseudonimo'] as String,
+      tamanhoTexto: pessoa.tamanhoTexto,
+    );
   }
 
   String _numero(Object? v) =>
@@ -233,23 +268,82 @@ class RepositorioApi implements Repositorio {
         m['id'] as String: m['nome'] as String,
     };
     final j = await _api.pedir('GET', '/receitas', perfilId: perfilId);
+    final agora = DateTime.now();
     return [
       for (final r in (j!['receitas'] as List))
-        Receita(
-          id: r['id'] as String,
-          medicamento: nomes[r['medicamentoId']] ?? 'Medicamento',
-          dose: r['dose'] as String,
-          horario: _horario(r['horario'] as Map<String, dynamic>),
-          ativa: r['ativa'] as bool,
-          validaAte: r['validaAte'] == null
-              ? null
-              : DateTime.parse(r['validaAte'] as String),
-          unidadesIniciais: r['unidadesIniciais'] as int?,
-          unidadesRestantes:
-              ((r['stock'] as Map?)?['unidadesRestantes'] as num?)?.round(),
-          diasRestantes: (r['stock'] as Map?)?['diasRestantes'] as int?,
-        ),
+        () {
+          final h = r['horario'] as Map<String, dynamic>;
+          final stock = r['stock'] as Map?;
+          final inicio = r['inicio'] == null ? agora : _data(r['inicio']);
+          final fim = r['fim'] == null ? null : _data(r['fim']);
+          // A validade e os dias que restam vêm do stock; sem unidades, do fim da receita.
+          final validade = r['validaAte'] != null
+              ? DateTime.parse(r['validaAte'] as String)
+              : (fim == null ? null : DateTime(fim.year, fim.month, fim.day));
+          var dias = stock?['diasRestantes'] as int?;
+          double? fracaoTempo;
+          if (fim != null) {
+            dias ??= (fim.difference(agora).inMinutes / 1440).ceil().clamp(
+              0,
+              100000,
+            );
+            final total = fim.difference(inicio).inMinutes;
+            if (total > 0) {
+              fracaoTempo = (fim.difference(agora).inMinutes / total).clamp(
+                0.0,
+                1.0,
+              );
+            }
+          }
+          return Receita(
+            id: r['id'] as String,
+            medicamentoId: r['medicamentoId'] as String,
+            medicamento: nomes[r['medicamentoId']] ?? 'Medicamento',
+            dose: r['dose'] as String,
+            horario: _horario(h),
+            intervaloHoras: h['tipo'] == 'intervalo'
+                ? (h['intervaloHoras'] as num).toDouble()
+                : null,
+            horasFixas: h['tipo'] == 'intervalo'
+                ? const []
+                : [for (final x in (h['horasLocais'] as List)) x as String],
+            ativa: r['ativa'] as bool,
+            validaAte: validade,
+            unidadesIniciais: r['unidadesIniciais'] as int?,
+            unidadesRestantes: (stock?['unidadesRestantes'] as num?)?.round(),
+            diasRestantes: dias,
+            fracaoTempo: fracaoTempo,
+          );
+        }(),
     ];
+  }
+
+  @override
+  Future<void> alterarReceita(
+    String perfilId,
+    Receita antiga,
+    NovaReceita nova,
+  ) async {
+    final nome = nova.medicamento.trim();
+    if (nome != antiga.medicamento && antiga.medicamentoId.isNotEmpty) {
+      await _api.pedir(
+        'PATCH',
+        '/medicamentos/${antiga.medicamentoId}',
+        perfilId: perfilId,
+        corpo: {'nome': nome},
+      );
+    }
+    await _api.pedir(
+      'PATCH',
+      '/receitas/${antiga.id}',
+      perfilId: perfilId,
+      corpo: {'dose': nova.dose.trim(), 'horario': horarioDaReceita(nova)},
+    );
+  }
+
+  @override
+  Future<void> apagarReceita(String perfilId, String receitaId) async {
+    await _api.pedir('DELETE', '/receitas/$receitaId', perfilId: perfilId);
   }
 
   @override

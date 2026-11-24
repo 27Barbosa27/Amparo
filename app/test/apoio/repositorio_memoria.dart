@@ -168,6 +168,26 @@ class RepositorioMemoria implements Repositorio {
     ];
   }
 
+  int codigosCriados = 0;
+  EstadoCodigo estadoDoCodigo = EstadoCodigo.aEspera;
+  DateTime? _expiraEm;
+
+  @override
+  Future<CodigoLigacao> criarCodigoLigacao(String perfilId) async {
+    codigosCriados++;
+    estadoDoCodigo = EstadoCodigo.aEspera;
+    _expiraEm = DateTime.now().add(const Duration(minutes: 15));
+    return CodigoLigacao(
+      id: 'cod$codigosCriados',
+      codigo: '482915',
+      expiraEm: _expiraEm!,
+    );
+  }
+
+  @override
+  Future<EstadoCodigo> estadoCodigo(String perfilId, String codigoId) async =>
+      estadoDoCodigo;
+
   @override
   Future<String?> nomeDoCuidador(String perfilId) async => 'Ana';
 
@@ -179,7 +199,11 @@ class RepositorioMemoria implements Repositorio {
 
   @override
   Future<Perfil> criarPessoa(NovaPessoa pessoa) async {
-    final p = Perfil(id: 'novo${++_seq}', nome: pessoa.nome.trim());
+    final p = Perfil(
+      id: 'novo${++_seq}',
+      nome: pessoa.nome.trim(),
+      tamanhoTexto: pessoa.tamanhoTexto,
+    );
     _perfisExtra.add(p);
     _tomas[p.id] = [];
     return p;
@@ -275,6 +299,33 @@ class RepositorioMemoria implements Repositorio {
     }
     _geradas[r.id] = horas.length;
     return r;
+  }
+
+  @override
+  Future<void> alterarReceita(
+    String perfilId,
+    Receita antiga,
+    NovaReceita nova,
+  ) async {
+    final lista = _receitas[perfilId] ??= [];
+    final i = lista.indexWhere((r) => r.id == antiga.id);
+    if (i < 0) return;
+    lista[i] = Receita(
+      id: antiga.id,
+      medicamento: nova.medicamento.trim(),
+      dose: nova.dose,
+      horario: nova.primeiraTomaTexto,
+      ativa: true,
+      horasFixas: nova.frequencia == Frequencia.cadaOitoHoras
+          ? const []
+          : [nova.primeiraTomaTexto],
+      intervaloHoras: nova.frequencia == Frequencia.cadaOitoHoras ? 8 : null,
+    );
+  }
+
+  @override
+  Future<void> apagarReceita(String perfilId, String receitaId) async {
+    _receitas[perfilId]?.removeWhere((r) => r.id == receitaId);
   }
 
   @override

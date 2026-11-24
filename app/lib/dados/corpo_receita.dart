@@ -14,32 +14,10 @@ Map<String, Object?> corpoDaReceita(
   String medicamentoId,
   DateTime agora,
 ) {
-  final Map<String, Object?> horario;
-  final DateTime inicio;
-  switch (r.frequencia) {
-    case Frequencia.cadaOitoHoras:
-      horario = {'tipo': 'intervalo', 'intervaloHoras': 8};
-      inicio = r.primeiraToma(agora);
-    case Frequencia.duasVezesDia:
-      final segunda = _hhmm((r.hora + 12) % 24, r.minuto);
-      horario = {
-        'tipo': 'horas_fixas',
-        'horasLocais': [r.primeiraTomaTexto, segunda]..sort(),
-      };
-      inicio = agora;
-    case Frequencia.umaVezDia:
-      horario = {
-        'tipo': 'horas_fixas',
-        'horasLocais': [r.primeiraTomaTexto],
-      };
-      inicio = agora;
-    case Frequencia.outra:
-      horario = {
-        'tipo': 'horas_fixas',
-        'horasLocais': r.horasOutra.toSet().toList()..sort(),
-      };
-      inicio = agora;
-  }
+  final horario = horarioDaReceita(r);
+  final inicio = r.frequencia == Frequencia.cadaOitoHoras
+      ? r.primeiraToma(agora)
+      : agora;
   return {
     'medicamentoId': medicamentoId,
     'dose': r.dose,
@@ -48,6 +26,24 @@ Map<String, Object?> corpoDaReceita(
     'fim': inicio.add(Duration(days: r.duracao.dias)).toUtc().toIso8601String(),
   };
 }
+
+/// O horário que a API espera (ver [corpoDaReceita]). Também serve para editar uma receita.
+Map<String, Object?> horarioDaReceita(NovaReceita r) => switch (r.frequencia) {
+  Frequencia.cadaOitoHoras => {'tipo': 'intervalo', 'intervaloHoras': 8},
+  Frequencia.duasVezesDia => {
+    'tipo': 'horas_fixas',
+    'horasLocais': [r.primeiraTomaTexto, _hhmm((r.hora + 12) % 24, r.minuto)]
+      ..sort(),
+  },
+  Frequencia.umaVezDia => {
+    'tipo': 'horas_fixas',
+    'horasLocais': [r.primeiraTomaTexto],
+  },
+  Frequencia.outra => {
+    'tipo': 'horas_fixas',
+    'horasLocais': r.horasOutra.toSet().toList()..sort(),
+  },
+};
 
 /// Lê "08:00, 14:00 21:00" para uma lista de horas válidas.
 /// Devolve nulo se alguma não for uma hora (HH:mm) ou se não houver nenhuma.

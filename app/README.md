@@ -35,7 +35,7 @@ flutter test --dart-define=API_REAL=http://127.0.0.1:3000 test/integracao_api_te
 
 ## Telemóvel virtual e Chrome
 
-- `.\scripts\chrome.ps1`: a app numa janela do Chrome com tamanho de telemóvel. Rápido e leve. Serve para o aspeto e os fluxos.
+- `.\scripts\chrome.ps1`: a app numa janela do Chrome com tamanho de telemóvel, com hot reload automático (grava um `.dart` em `lib\` e a janela atualiza em 1 a 2 s; `R` no terminal reinicia, `q` sai). Rápido e leve. Serve para o aspeto e os fluxos. Aceita `-Tela hoje` (ou `simples`, `receitas`, `mais`...) e `-Api http://...`.
 - `.\scripts\emulador.ps1 ligar|desligar|estado`: Android 11 leve (cerca de 3 GB de RAM medidos). Só faz falta para alarmes, notificações e permissões.
 
 ## Estado

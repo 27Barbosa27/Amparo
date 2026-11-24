@@ -6,7 +6,7 @@ import type { Db } from '../db.js';
 import { apagarConta, atualizarConta, exportarConta, telefoneDoUtilizador } from './conta.js';
 import { lerChave } from './cifra.js';
 import { ErroAuth } from './erros.js';
-import { pedirRecuperacao, reporSenha } from './recuperacao.js';
+import { pedirRecuperacao, reporSenha, verificarCodigo } from './recuperacao.js';
 import { enviadorEmailNulo, type EnviadorEmail } from '../email/enviador.js';
 import { criarVerificadorExterno, entrarComFornecedor, type Provedor, type VerificadorExterno } from './externo.js';
 import { exigirAutenticacao } from './middleware.js';
@@ -43,7 +43,8 @@ const externoSchema = z.object({
 });
 const apagarSchema = z.object({ senha: z.string().max(128).optional(), confirmar: z.boolean().optional() });
 const recuperarSchema = z.object({ email: emailSchema });
-const reporSchema = z.object({ token: z.string().min(20).max(200), senha: senhaSchema });
+const verificarSchema = z.object({ email: emailSchema, codigo: z.string().regex(/^\d{6}$/) });
+const reporSchema = z.object({ email: emailSchema, codigo: z.string().regex(/^\d{6}$/), senha: senhaSchema });
 const refreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
 
 export interface OpcoesAuth {
@@ -108,14 +109,20 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
     const d = recuperarSchema.safeParse(req.body);
     // Resposta igual para tudo (conta que existe ou não, e até um email mal formado): não se revela nada.
     if (d.success) {
-      await pedirRecuperacao(db, d.data.email, segredos, { enviador: opcoes.enviadorEmail ?? enviadorEmailNulo, linkBase: config.APP_LINK_BASE }, req.ip);
+      await pedirRecuperacao(db, d.data.email, segredos, { enviador: opcoes.enviadorEmail ?? enviadorEmailNulo }, req.ip);
     }
     res.status(202).json({ mensagem: 'Se existir uma conta com esse email, enviámos uma ligação para definir a palavra-passe.' });
   });
 
+  router.post('/recuperar/verificar', async (req, res) => {
+    const d = verificarSchema.parse(req.body);
+    await verificarCodigo(db, d.email, d.codigo, segredos, req.ip);
+    res.status(204).end();
+  });
+
   router.post('/repor', async (req, res) => {
     const d = reporSchema.parse(req.body);
-    await reporSenha(db, d.token, d.senha, req.ip);
+    await reporSenha(db, d.email, d.codigo, d.senha, segredos, req.ip);
     res.status(204).end();
   });
 

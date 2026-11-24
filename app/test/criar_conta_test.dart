@@ -7,6 +7,7 @@ import 'package:amparo/dados/autenticacao.dart';
 import 'apoio/autenticacao_memoria.dart';
 import 'apoio/repositorio_memoria.dart';
 
+import 'package:amparo/ui/componentes/icones.dart';
 import 'package:amparo/ui/ecras/criar_conta.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -62,7 +63,7 @@ Future<void> preencher(
   await tester.enterText(find.byType(TextField).at(0), nome);
   await tester.enterText(find.byType(TextField).at(1), email);
   await tester.enterText(find.byType(TextField).at(2), senha);
-  if (termos) await tester.tap(find.byType(Checkbox));
+  if (termos) await tester.tap(find.byKey(const ValueKey('caixa-termos')));
   await tester.pumpAndSettle();
 }
 
@@ -196,9 +197,12 @@ void main() {
         findsOneWidget,
       );
       expect(
-        tester.widget<Checkbox>(find.byType(Checkbox)).value,
-        isFalse,
-      ); // o consentimento é um ato explícito
+        find.descendant(
+          of: find.byKey(const ValueKey('caixa-termos')),
+          matching: find.byType(Icone),
+        ),
+        findsNothing,
+      ); // o consentimento é um ato explícito: a caixa começa sem visto
       expect(find.text('ou registe-se com'), findsOneWidget);
       expect(find.text('Apple'), findsOneWidget);
       expect(find.text('Google'), findsOneWidget);
@@ -247,7 +251,7 @@ void main() {
         await tester.tap(find.text('Entrar com este email'));
         await tester.pumpAndSettle();
         expect(
-          find.text('Bem-vinda de volta. Entre para ver as tomas.'),
+          find.text('Que bom ver de novo. Entre para ver as tomas.'),
           findsOneWidget,
         ); // voltou ao Entrar
       },

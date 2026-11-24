@@ -64,7 +64,35 @@ void main() {
       expect(dias, hasLength(7));
       expect(dias.last.resultado, ResultadoDia.emCurso);
       expect(percentagemAdesao(dias), 83); // 5 de 6 dias fechados
-      expect(percentagemAdesao(const []), 100);
+      expect(
+        percentagemAdesao(const []),
+        isNull,
+      ); // sem histórico não se inventa uma percentagem
+      // dias sem tomas não contam: nem como bons nem como maus
+      final soSemDados = [
+        for (var i = 0; i < 7; i++)
+          DiaAdesao(
+            dia: DateTime(2026, 11, 15 + i),
+            resultado: ResultadoDia.semDados,
+          ),
+      ];
+      expect(percentagemAdesao(soSemDados), isNull);
+      final misto = [
+        DiaAdesao(
+          dia: DateTime(2026, 11, 15),
+          resultado: ResultadoDia.semDados,
+        ),
+        DiaAdesao(
+          dia: DateTime(2026, 11, 16),
+          resultado: ResultadoDia.tudoTomado,
+        ),
+        DiaAdesao(
+          dia: DateTime(2026, 11, 17),
+          resultado: ResultadoDia.esquecida,
+        ),
+        DiaAdesao(dia: DateTime(2026, 11, 18), resultado: ResultadoDia.emCurso),
+      ];
+      expect(percentagemAdesao(misto), 50);
     });
   });
 
@@ -160,6 +188,23 @@ void main() {
         sabado13h,
       )).map((t) => t.id);
       expect(maria.toSet().intersection(manuel.toSet()), isEmpty);
+    });
+  });
+
+  group('TamanhoTexto', () {
+    test('lê o valor da API e cresce do normal ao muito grande', () {
+      expect(TamanhoTexto.daApi('normal'), TamanhoTexto.normal);
+      expect(TamanhoTexto.daApi('grande'), TamanhoTexto.grande);
+      expect(TamanhoTexto.daApi('muito_grande'), TamanhoTexto.muitoGrande);
+      expect(TamanhoTexto.daApi(null), TamanhoTexto.normal);
+      expect(
+        TamanhoTexto.grande.escala,
+        greaterThan(TamanhoTexto.normal.escala),
+      );
+      expect(
+        TamanhoTexto.muitoGrande.escala,
+        greaterThan(TamanhoTexto.grande.escala),
+      );
     });
   });
 }

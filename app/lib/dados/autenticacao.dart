@@ -12,6 +12,18 @@ abstract class Autenticacao {
   /// Tenta retomar a sessão guardada. Verdadeiro se há sessão válida.
   Future<bool> restaurar();
 
+  /// Pede o email de recuperação. A resposta é sempre a mesma, exista a conta ou não: devolve só erros de
+  /// rede ou de limite (`sem_rede`, `demasiadas_tentativas`), ou nulo.
+  Future<String?> pedirRecuperacao(String email);
+
+  /// Confirma o código do email SEM o gastar (conta as tentativas erradas): só depois de confirmado se
+  /// deixa escolher a palavra-passe. Devolve `token_invalido`, `sem_rede`..., ou nulo se está certo.
+  Future<String?> verificarCodigo(String email, String codigo);
+
+  /// Define a nova palavra-passe com o código de 6 dígitos do email. Devolve `token_invalido` (errado,
+  /// expirado, já usado ou esgotado), `pedido_invalido`, `sem_rede`..., ou nulo se correu bem.
+  Future<String?> reporSenha(String email, String codigo, String senha);
+
   Future<void> sair();
 
   /// O nome do cuidador que entrou (para "Marcada por Ana").
@@ -65,6 +77,58 @@ class AutenticacaoApi implements Autenticacao {
         renovacao: j['refreshToken'] as String,
       );
       _nome = (j['utilizador'] as Map)['nome'] as String? ?? nome;
+      return null;
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+  }
+
+  @override
+  Future<String?> pedirRecuperacao(String email) async {
+    try {
+      await _api.pedir(
+        'POST',
+        '/auth/recuperar',
+        corpo: {'email': email.trim()},
+        autenticado: false,
+      );
+      return null;
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+  }
+
+  @override
+  Future<String?> verificarCodigo(String email, String codigo) async {
+    try {
+      await _api.pedir(
+        'POST',
+        '/auth/recuperar/verificar',
+        corpo: {
+          'email': email.trim(),
+          'codigo': codigo.replaceAll(RegExp(r'\s'), ''),
+        },
+        autenticado: false,
+      );
+      return null;
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+  }
+
+  @override
+  Future<String?> reporSenha(String email, String codigo, String senha) async {
+    try {
+      await _api.pedir(
+        'POST',
+        '/auth/repor',
+        corpo: {
+          'email': email.trim(),
+          'codigo': codigo.replaceAll(RegExp(r'\s'), ''),
+          'senha': senha,
+        },
+        autenticado: false,
+      );
       return null;
     } on ErroApi catch (e) {
       return e.codigo;

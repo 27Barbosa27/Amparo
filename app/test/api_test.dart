@@ -455,7 +455,10 @@ void main() {
         dias[5].resultado,
         ResultadoDia.tudoTomado,
       ); // ontem: saltada conta como resolvida
-      expect(dias[0].resultado, ResultadoDia.tudoTomado); // sem tomas
+      expect(
+        dias[0].resultado,
+        ResultadoDia.semDados,
+      ); // sem tomas: nada a avaliar
     });
 
     test(

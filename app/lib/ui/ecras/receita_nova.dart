@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../dados/api.dart';
@@ -7,7 +10,10 @@ import '../../dominio/modelos.dart';
 import '../../tema/tokens.dart';
 import '../componentes/animacao.dart';
 import '../componentes/base.dart';
+import '../componentes/estilo.dart';
 import '../componentes/formulario.dart';
+import '../componentes/icones.dart';
+import '../componentes/resultado.dart';
 
 /// O fluxo do design: Adicionar receita → A criar as tomas → Receita criada (ou erro ao guardar).
 class FluxoReceita {
@@ -16,6 +22,7 @@ class FluxoReceita {
     required this.perfil,
     required this.relogio,
     required this.aoVerHoje,
+    this.aoCriada,
     this.intervaloDeConsulta = const Duration(milliseconds: 500),
   });
 
@@ -23,8 +30,11 @@ class FluxoReceita {
   final Perfil perfil;
   final DateTime Function() relogio;
 
-  /// O cuidador escolheu "Ver Hoje": quem chamou volta ao ecrã Hoje e recarrega.
+  /// O cuidador escolheu "Ver página principal": quem chamou volta a ela e recarrega.
   final VoidCallback aoVerHoje;
+
+  /// A receita ficou criada (as tomas geradas): quem chamou recarrega as listas.
+  final VoidCallback? aoCriada;
   final Duration intervaloDeConsulta;
 
   void abrir(BuildContext context) =>
@@ -40,21 +50,24 @@ class FluxoReceita {
           nova: nova,
           relogio: relogio,
           intervalo: intervaloDeConsulta,
-          aoConcluir: (c2, r) => Navigator.of(c2).pushReplacement(
-            rotaPagina<void>(
-              SucessoReceitaEcra(
-                nova: nova,
-                agora: relogio(),
-                aoVerHoje: (c3) {
-                  Navigator.of(c3).popUntil((rota) => rota.isFirst);
-                  aoVerHoje();
-                },
-                aoOutra: (c3) =>
-                    Navigator.of(c3)
-                        .pushReplacement(rotaPagina<void>(_formulario())),
+          aoConcluir: (c2, r) {
+            aoCriada?.call();
+            Navigator.of(c2).pushReplacement(
+              rotaPagina<void>(
+                SucessoReceitaEcra(
+                  nova: nova,
+                  agora: relogio(),
+                  aoVerHoje: (c3) {
+                    Navigator.of(c3).popUntil((rota) => rota.isFirst);
+                    aoVerHoje();
+                  },
+                  aoOutra: (c3) =>
+                      Navigator.of(c3)
+                          .pushReplacement(rotaPagina<void>(_formulario())),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     ),
@@ -67,22 +80,47 @@ class ReceitaNovaEcra extends StatefulWidget {
     super.key,
     required this.perfil,
     required this.aoContinuar,
+    this.editar,
   });
   final Perfil perfil;
   final void Function(BuildContext, NovaReceita) aoContinuar;
+
+  /// Uma receita que já existe: o formulário abre com os valores dela e guarda as alterações.
+  final Receita? editar;
 
   @override
   State<ReceitaNovaEcra> createState() => _ReceitaNovaEcraState();
 }
 
 class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
-  final _medicamento = TextEditingController();
-  final _dose = TextEditingController(text: '1 comprimido');
-  final _hora = TextEditingController(text: '08:00');
-  final _horasOutra = TextEditingController();
-  Frequencia _frequencia = Frequencia.cadaOitoHoras;
-  Duracao _duracao = Duracao.tresMeses;
+  late final NovaReceita? _inicial = widget.editar?.comoNova();
+  late final _medicamento = TextEditingController(
+    text: _inicial?.medicamento ?? '',
+  );
+  late final _dose = TextEditingController(
+    text: _inicial?.dose ?? TipoMedicacao.comprimido.doseInicial,
+  );
+  late final _hora = TextEditingController(
+    text: _inicial?.primeiraTomaTexto ?? '08:00',
+  );
+  late final _horasOutra = TextEditingController(
+    text: _inicial?.horasOutra.join(', ') ?? '',
+  );
+  late Frequencia _frequencia =
+      _inicial?.frequencia ?? Frequencia.cadaOitoHoras;
+  late Duracao _duracao = _inicial?.duracao ?? Duracao.tresMeses;
+  late TipoMedicacao _tipo = _inicial?.tipo ?? TipoMedicacao.comprimido;
   String? _erroMedicamento, _erroDose, _erroHora, _erroOutra;
+
+  /// Mudar o tipo muda a dose sugerida, mas só se a pessoa ainda não a escreveu à mão.
+  void _escolherTipo(TipoMedicacao novo) {
+    setState(() {
+      if (_dose.text.trim() == _tipo.doseInicial) {
+        _dose.text = novo.doseInicial;
+      }
+      _tipo = novo;
+    });
+  }
 
   @override
   void dispose() {
@@ -139,6 +177,7 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
         minuto: minuto,
         duracao: _duracao,
         horasOutra: outras,
+        tipo: _tipo,
       ),
     );
   }
@@ -146,14 +185,29 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
   @override
   Widget build(BuildContext context) {
     return CorpoComRodape(
+      margemInferior: 28,
       conteudo: [
         CabecalhoFormulario(
-          titulo: 'Adicionar receita',
-          subtitulo: 'Criamos as tomas por si, para ${widget.perfil.nome}.',
+          titulo: widget.editar == null
+              ? 'Adicionar receita'
+              : 'Editar receita',
+          subtitulo: widget.editar == null
+              ? 'Criamos as tomas por si, para ${widget.perfil.nome}.'
+              : 'As tomas que ainda faltam ajustam-se às alterações.',
+          espaco: 14,
+        ),
+        const SizedBox(height: 14),
+        GrelhaOpcoes<TipoMedicacao>(
+          titulo: 'O que toma?',
+          opcoes: TipoMedicacao.values,
+          texto: (o) => o.texto,
+          valor: _tipo,
+          colunas: 2,
+          aoEscolher: _escolherTipo,
         ),
         const SizedBox(height: 14),
         CampoTexto(
-          rotulo: 'Medicamento',
+          rotulo: 'Nome do medicamento',
           dica: 'Ex.: Lisinopril 10 mg',
           controlador: _medicamento,
           erro: _erroMedicamento,
@@ -193,18 +247,22 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
             erro: _erroHora,
             aoMudar: (_) => setState(() => _erroHora = null),
           ),
-        const SizedBox(height: 14),
-        GrelhaOpcoes<Duracao>(
-          titulo: 'Durante quanto tempo?',
-          opcoes: Duracao.values,
-          texto: (d) => d.texto,
-          valor: _duracao,
-          aoEscolher: (d) => setState(() => _duracao = d),
-        ),
+        if (widget.editar == null) ...[
+          const SizedBox(height: 14),
+          GrelhaOpcoes<Duracao>(
+            titulo: 'Durante quanto tempo?',
+            opcoes: Duracao.values,
+            texto: (d) => d.texto,
+            valor: _duracao,
+            aoEscolher: (d) => setState(() => _duracao = d),
+          ),
+        ],
       ],
       rodape: [
         Botao(
-          texto: 'Criar tomas e alarmes',
+          texto: widget.editar == null
+              ? 'Criar tomas e alarmes'
+              : 'Guardar alterações',
           icone: Icons.check,
           altura: 60,
           raio: 22,
@@ -255,7 +313,7 @@ class _CarregarReceitaEcraState extends State<CarregarReceitaEcra> {
   }
 
   Future<void> _iniciar() async {
-    setState(() => _fase = _Fase.aCriar);
+    if (_fase != _Fase.aCriar) setState(() => _fase = _Fase.aCriar);
     try {
       // Numa nova tentativa depois de a receita já estar criada, só se retoma o acompanhamento.
       _receita ??= await widget.repositorio.criarReceita(
@@ -315,71 +373,149 @@ class _CarregarReceitaEcraState extends State<CarregarReceitaEcra> {
       _Fase.aCriar || _Fase.aGerar => _Passo.aCorrer,
       _ => _Passo.feito,
     };
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          child: Column(
-            children: [
-              const SizedBox(height: 40),
-              Semantics(
-                header: true,
-                child: Text(
-                  'A criar as tomas',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.65,
-                    color: t.texto,
+    // A barra de baixo mostra onde vai o trabalho (no design é um valor fixo de 55%). Anda sempre
+    // para a frente, devagar enquanto o servidor trabalha, em vez de saltar de um valor para o outro.
+    final progresso = switch (_fase) {
+      _Fase.aCriar => .2,
+      _Fase.aGerar => .9,
+      _ => 1.0,
+    };
+    final duracaoBarra = switch (_fase) {
+      _Fase.aCriar => const Duration(milliseconds: 900),
+      _Fase.aGerar => const Duration(seconds: 6),
+      _ => const Duration(milliseconds: 450),
+    };
+    final blocos = <Widget>[
+      Column(
+        children: [
+          SizedBox(
+            width: 88,
+            height: 88,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: _fase != _Fase.feito
+                  ? const _RodaAGirar(tamanho: 88, traco: 5)
+                  : SeloIcone(
+                      key: const ValueKey('feito'),
+                      cor: t.ok,
+                      dados: Icones.visto,
+                      corIcone: t.superficie,
+                      tamanho: 88,
+                      traco: 2.4,
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Semantics(
+            header: true,
+            liveRegion: true,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'A criar as tomas',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.48,
+                  color: t.texto,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${widget.nova.medicamento} · ${widget.nova.duracao.texto}',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+              color: t.texto2,
+            ),
+          ),
+        ],
+      ),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+        decoration: BoxDecoration(
+          color: t.superficie,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: t.sombra,
+        ),
+        child: Column(
+          children: [
+            _LinhaPasso(
+              estado: geracao,
+              texto: _fase == _Fase.feito
+                  ? 'Gerar as tomas ($_tomas)'
+                  : 'Gerar as tomas',
+            ),
+            const _LinhaPasso(
+              estado: _Passo.emBreve,
+              texto: 'Agendar os alarmes',
+              nota: 'Em breve',
+            ),
+            _LinhaPasso(
+              estado: _fase == _Fase.feito ? _Passo.feito : _Passo.espera,
+              texto: 'Sincronizar com $nome',
+            ),
+          ],
+        ),
+      ),
+      ExcludeSemantics(
+        child: Container(
+          height: 8,
+          decoration: BoxDecoration(
+            color: t.superficie2,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          alignment: Alignment.centerLeft,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(end: progresso),
+            duration: duracaoBarra,
+            curve: Curves.easeOutCubic,
+            builder: (context, valor, _) => FractionallySizedBox(
+              widthFactor: valor,
+              child: Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: t.primaria,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ];
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: CustomScrollView(
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 48, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ...escalonar(blocos, espaco: 18),
+                      const Spacer(),
+                      const SizedBox(height: 8),
+                      Botao(
+                        texto: 'Continuar',
+                        altura: 60,
+                        raio: 22,
+                        tamanhoTexto: 18,
+                        aoTocar: _fase == _Fase.feito
+                            ? () => widget.aoConcluir(context, _receita!)
+                            : null,
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '${widget.nova.medicamento} · ${widget.nova.duracao.texto}',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: t.texto2,
-                ),
-              ),
-              const SizedBox(height: 28),
-              Cartao(
-                child: Column(
-                  children: [
-                    _LinhaPasso(
-                      estado: geracao,
-                      texto: _fase == _Fase.feito
-                          ? 'Gerar as tomas ($_tomas)'
-                          : 'Gerar as tomas',
-                    ),
-                    const SizedBox(height: 16),
-                    const _LinhaPasso(
-                      estado: _Passo.emBreve,
-                      texto: 'Agendar os alarmes',
-                      nota: 'Em breve',
-                    ),
-                    const SizedBox(height: 16),
-                    _LinhaPasso(
-                      estado: _fase == _Fase.feito
-                          ? _Passo.feito
-                          : _Passo.espera,
-                      texto: 'Sincronizar com $nome',
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Botao(
-                texto: 'Continuar',
-                altura: 60,
-                raio: 22,
-                tamanhoTexto: 18,
-                aoTocar: _fase == _Fase.feito
-                    ? () => widget.aoConcluir(context, _receita!)
-                    : null,
               ),
             ],
           ),
@@ -387,6 +523,99 @@ class _CarregarReceitaEcraState extends State<CarregarReceitaEcra> {
       ),
     );
   }
+}
+
+/// A roda a girar do design (viewBox 50: círculo de pista e arco de um quarto, uma volta em 0,9 s).
+class _RodaAGirar extends StatefulWidget {
+  const _RodaAGirar({required this.tamanho, required this.traco});
+  final double tamanho;
+  final double traco;
+
+  @override
+  State<_RodaAGirar> createState() => _RodaAGirarState();
+}
+
+class _RodaAGirarState extends State<_RodaAGirar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+  bool _iniciada = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_iniciada) return;
+    _iniciada = true;
+    if (!MediaQuery.disableAnimationsOf(context)) _c.repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    // A pista e o arco desenham-se uma só vez; só a rotação muda (linear, 1 volta em 0,9 s), por isso
+    // o movimento é contínuo mesmo quando o resto do ecrã se atualiza.
+    return ExcludeSemantics(
+      child: RepaintBoundary(
+        child: SizedBox(
+          width: widget.tamanho,
+          height: widget.tamanho,
+          child: RotationTransition(
+            turns: _c,
+            child: CustomPaint(
+              painter: _PintorRoda(
+                pista: t.linha,
+                arco: t.primaria,
+                traco: widget.traco,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PintorRoda extends CustomPainter {
+  const _PintorRoda({
+    required this.pista,
+    required this.arco,
+    required this.traco,
+  });
+  final Color pista;
+  final Color arco;
+  final double traco;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final escala = size.width / 50;
+    final centro = Offset(size.width / 2, size.height / 2);
+    final raio = 20 * escala;
+    Paint p(Color c) => Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = traco * escala
+      ..strokeCap = StrokeCap.round
+      ..color = c;
+    canvas.drawCircle(centro, raio, p(pista));
+    canvas.drawArc(
+      Rect.fromCircle(center: centro, radius: raio),
+      -math.pi / 2,
+      math.pi / 2,
+      false,
+      p(arco),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PintorRoda antigo) =>
+      antigo.pista != pista || antigo.arco != arco || antigo.traco != traco;
 }
 
 enum _Passo { espera, aCorrer, feito, emBreve }
@@ -401,23 +630,20 @@ class _LinhaPasso extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.t;
     final Widget icone = switch (estado) {
-      _Passo.feito => Selo(
+      _Passo.feito => SeloIcone(
         cor: t.ok,
-        icone: Icons.check,
+        dados: Icones.visto,
         corIcone: t.superficie,
+        tamanho: 28,
+        traco: 2.4,
       ),
-      _Passo.aCorrer => SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(strokeWidth: 3, color: t.primaria),
-      ),
+      _Passo.aCorrer => const _RodaAGirar(tamanho: 28, traco: 6),
       _ => Container(
-        width: 24,
-        height: 24,
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: t.superficie2,
-          border: Border.all(color: t.linha),
+          border: Border.all(color: t.linha, width: 2),
         ),
       ),
     };
@@ -432,34 +658,41 @@ class _LinhaPasso extends StatelessWidget {
             _Passo.espera => 'à espera',
           }}',
       excludeSemantics: true,
-      child: Row(
-        children: [
-          icone,
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              texto,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: apagado ? t.texto2 : t.texto,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            icone,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                texto,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: apagado ? t.texto2 : t.texto,
+                ),
               ),
             ),
-          ),
-          if (nota != null)
-            Text(
-              nota!,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: t.texto2,
+            if (nota != null)
+              Text(
+                nota!,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: t.texto2,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
+
+/// A cápsula do design (a mesma do cartão do modo simples), em 34 px.
+const _svgCapsulaReceita =
+    '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><g transform="rotate(-45 32 32)"><rect x="6" y="21" width="52" height="22" rx="11" fill="#FFFFFF" stroke="#0F172A" stroke-width="3"/><path d="M32 21h15a11 11 0 0 1 0 22H32z" fill="#2DD4BF" stroke="#0F172A" stroke-width="3" stroke-linejoin="round"/></g></svg>';
 
 /// "Receita criada" (design: Sucesso-Receita).
 class SucessoReceitaEcra extends StatelessWidget {
@@ -478,46 +711,35 @@ class SucessoReceitaEcra extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.t;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          child: Column(
-            children: [
-              const AnimacaoLottie(
-                asset: 'assets/lottie/sucesso.json',
-                largura: 220,
-                altura: 240,
-                ultimoFotograma: 112,
-                descricao: 'Concluído com sucesso',
-              ),
-              const SizedBox(height: 12),
-              Semantics(
-                header: true,
-                child: Text(
-                  'Receita criada',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.65,
-                    color: t.texto,
+    return EcraResultado(
+      topo: const TopoResultado(
+        titulo: 'Receita criada',
+        texto: 'Criámos as tomas.',
+      ),
+      cartao: CartaoResultado(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: t.primariaSuave,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ExcludeSemantics(
+                    child: SvgPicture.string(
+                      _svgCapsulaReceita,
+                      width: 34,
+                      height: 34,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Criámos as tomas.',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: t.texto2,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Cartao(
-                child: SizedBox(
-                  width: double.infinity,
+                const SizedBox(width: 14),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -529,6 +751,7 @@ class SucessoReceitaEcra extends StatelessWidget {
                           color: t.texto,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         nova.resumo,
                         style: TextStyle(
@@ -537,52 +760,60 @@ class SucessoReceitaEcra extends StatelessWidget {
                           color: t.texto2,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Divider(height: 1, color: t.linha),
-                      const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(height: 1, color: t.linha),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Icone(Icones.relogioCirculo, tamanho: 24, cor: t.texto2),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
                         'Primeira toma',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: t.texto2,
-                        ),
-                      ),
-                      Text(
-                        nova.primeiraTomaPorExtenso(agora),
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: t.texto,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        nova.primeiraTomaPorExtenso(agora),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: t.texto2,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
-              const Spacer(),
-              Botao(
-                texto: 'Ver Hoje',
-                altura: 60,
-                raio: 22,
-                tamanhoTexto: 18,
-                aoTocar: () => aoVerHoje(context),
-              ),
-              const SizedBox(height: 8),
-              Botao(
-                texto: 'Adicionar outra receita',
-                icone: Icons.add,
-                altura: 52,
-                raio: 20,
-                fundo: Colors.transparent,
-                cor: t.texto,
-                contorno: t.linha,
-                aoTocar: () => aoOutra(context),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
+      acoes: [
+        Botao(
+          texto: 'Ver página principal',
+          altura: 60,
+          raio: 22,
+          tamanhoTexto: 18,
+          aoTocar: () => aoVerHoje(context),
+        ),
+        AcaoTexto(
+          texto: 'Adicionar outra receita',
+          aoTocar: () => aoOutra(context),
+        ),
+      ],
     );
   }
 }
@@ -614,106 +845,72 @@ class ErroGuardarEcra extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.t;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          child: Column(
-            children: [
-              const AnimacaoLottie(
-                asset: 'assets/lottie/erro.json',
-                largura: 160,
-                altura: 160,
-                descricao: 'Algo correu mal',
-              ),
-              const SizedBox(height: 12),
-              Semantics(
-                header: true,
-                child: Text(
-                  'Não foi possível guardar',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 26,
-                    height: 1.15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.65,
-                    color: t.texto,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  mensagem(codigo),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    height: 1.45,
-                    fontWeight: FontWeight.w500,
-                    color: t.texto2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Cartao(
-                cor: t.mauSuave,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        titulo,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: t.mauTexto,
-                        ),
-                      ),
-                      Text(
-                        'Ainda não foi guardada',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: t.mauTexto,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Botao(
-                texto: 'Tentar de novo',
-                icone: Icons.refresh,
-                altura: 60,
-                raio: 22,
-                tamanhoTexto: 18,
-                aoTocar: aoTentarDeNovo,
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: aoCancelar,
-                child: SizedBox(
-                  height: 48,
-                  child: Center(
-                    child: Text(
-                      'Cancelar',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: t.texto,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+    return EcraResultado(
+      topo: TopoResultado(
+        titulo: 'Não foi possível guardar',
+        texto: mensagem(codigo),
+        animacao: const AnimacaoLottie(
+          asset: 'assets/lottie/erro.json',
+          largura: 170,
+          altura: 170,
+          descricao: 'Algo correu mal',
         ),
       ),
+      cartao: CartaoResultado(
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: t.primariaSuave,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icone(
+                Icones.semNuvem,
+                tamanho: 24,
+                cor: t.sobrePrimariaSuave,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: t.texto,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Ainda não foi guardada',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: t.texto2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      acoes: [
+        Botao(
+          texto: 'Tentar de novo',
+          altura: 60,
+          raio: 22,
+          tamanhoTexto: 18,
+          aoTocar: aoTentarDeNovo,
+        ),
+        AcaoTexto(texto: 'Cancelar', aoTocar: aoCancelar),
+      ],
     );
   }
 }

@@ -2,11 +2,21 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../tema/tokens.dart';
 import 'base.dart';
+import 'icones.dart';
 
 /// Uma página empurrada (formulários e resultados): fundo em gradiente e área segura.
-Route<T> rotaPagina<T>(Widget conteudo) => MaterialPageRoute<T>(
-  builder: (_) => Scaffold(
+///
+/// No design os ecrãs não deslizam: aparecem e os blocos sobem um a um (`mFadeUp`), por isso a rota só faz
+/// um esbatimento rápido e deixa a entrada escalonada de cada ecrã fazer o resto.
+Route<T> rotaPagina<T>(Widget conteudo) => PageRouteBuilder<T>(
+  transitionDuration: const Duration(milliseconds: 220),
+  reverseTransitionDuration: const Duration(milliseconds: 160),
+  pageBuilder: (_, _, _) => Scaffold(
     body: FundoGradiente(child: SafeArea(child: conteudo)),
+  ),
+  transitionsBuilder: (_, animacao, _, filho) => FadeTransition(
+    opacity: CurvedAnimation(parent: animacao, curve: Curves.easeOut),
+    child: filho,
   ),
 );
 
@@ -16,9 +26,13 @@ class CabecalhoFormulario extends StatelessWidget {
     super.key,
     required this.titulo,
     required this.subtitulo,
+    this.espaco = 18,
   });
   final String titulo;
   final String subtitulo;
+
+  /// Espaço entre o botão de voltar e o título (o `gap` da coluna do design).
+  final double espaco;
 
   @override
   Widget build(BuildContext context) {
@@ -43,12 +57,14 @@ class CabecalhoFormulario extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: t.sombra,
                 ),
-                child: Icon(Icons.chevron_left, size: 28, color: t.texto),
+                child: Center(
+                  child: Icone(Icones.voltar, tamanho: 24, cor: t.texto),
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: espaco),
         Semantics(
           header: true,
           child: Text(
@@ -56,8 +72,8 @@ class CabecalhoFormulario extends StatelessWidget {
             style: TextStyle(
               fontSize: 22,
               height: 1.15,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.44,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.55,
               color: t.texto,
             ),
           ),
@@ -83,25 +99,33 @@ class CorpoComRodape extends StatelessWidget {
     super.key,
     required this.conteudo,
     required this.rodape,
+    this.espacoRodape = 18,
+    this.margemInferior = 24,
   });
   final List<Widget> conteudo;
   final List<Widget> rodape;
+
+  /// O espaço mínimo entre o conteúdo e o rodapé encostado em baixo (o `gap` da coluna do design).
+  final double espacoRodape;
+
+  /// A margem de baixo do ecrã (24 ou 28 px, conforme o design).
+  final double margemInferior;
 
   @override
   Widget build(BuildContext context) {
     // Rola quando o conteúdo é maior do que o ecrã e, quando sobra espaço, encosta o rodapé em baixo.
     return CustomScrollView(
       slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          sliver: SliverFillRemaining(
-            hasScrollBody: false,
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, 12, 20, margemInferior),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 ...conteudo,
                 const Spacer(),
-                const SizedBox(height: 18),
+                SizedBox(height: espacoRodape),
                 ...rodape,
               ],
             ),
@@ -123,16 +147,38 @@ class CampoTexto extends StatelessWidget {
     this.teclado,
     this.aoMudar,
     this.maxLength = 100,
+    this.altura = 56,
+    this.espacoRotulo = 8,
+    this.senha = false,
+    this.ativo = true,
+    this.sufixo,
+    this.aoSubmeter,
+    this.autofill,
   });
   final String rotulo;
   final TextEditingController controlador;
   final String? dica;
+
+  /// Palavra-passe: o texto fica escondido e há um olho para o mostrar.
+  final bool senha;
+
+  /// Desativado: não se pode escrever (fica esbatido).
+  final bool ativo;
+
+  /// Um widget dentro do campo, à direita (por exemplo o visto de "confirmado").
+  final Widget? sufixo;
+  final VoidCallback? aoSubmeter;
+  final Iterable<String>? autofill;
 
   /// Mensagem de erro por baixo do campo (o contorno fica a vermelho).
   final String? erro;
   final TextInputType? teclado;
   final ValueChanged<String>? aoMudar;
   final int maxLength;
+
+  /// Altura da caixa (56 nos formulários de pessoa e receita, 52 no Entrar e no Registo).
+  final double altura;
+  final double espacoRotulo;
 
   @override
   Widget build(BuildContext context) {
@@ -153,33 +199,45 @@ class CampoTexto extends StatelessWidget {
             color: t.texto,
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: espacoRotulo),
         SizedBox(
-          height: 56,
-          child: TextField(
-            controller: controlador,
-            keyboardType: teclado,
-            maxLength: maxLength,
-            autocorrect: false,
-            onChanged: aoMudar,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: t.texto,
-            ),
-            decoration: InputDecoration(
-              counterText: '',
-              hintText: dica,
-              hintStyle: TextStyle(
-                color: t.texto2.withValues(alpha: .85),
+          height: altura,
+          child: _CampoSenha(
+            ativo: senha,
+            construir: (escondido, olho) => TextField(
+              controller: controlador,
+              enabled: ativo,
+              keyboardType: teclado,
+              maxLength: maxLength,
+              autocorrect: false,
+              obscureText: escondido,
+              enableSuggestions: !senha,
+              autofillHints: autofill,
+              textInputAction: aoSubmeter == null
+                  ? TextInputAction.next
+                  : TextInputAction.done,
+              onSubmitted: aoSubmeter == null ? null : (_) => aoSubmeter!(),
+              onChanged: aoMudar,
+              style: TextStyle(
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
+                color: t.texto,
               ),
-              filled: true,
-              fillColor: t.superficie,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              border: borda(cor),
-              enabledBorder: borda(cor),
-              focusedBorder: borda(erro == null ? t.primaria : t.mau),
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: dica,
+                hintStyle: TextStyle(
+                  color: t.texto2.withValues(alpha: .85),
+                  fontWeight: FontWeight.w600,
+                ),
+                filled: true,
+                fillColor: t.superficie,
+                suffixIcon: olho ?? sufixo,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                border: borda(cor),
+                enabledBorder: borda(cor),
+                focusedBorder: borda(erro == null ? t.primaria : t.mau),
+              ),
             ),
           ),
         ),
@@ -198,6 +256,38 @@ class CampoTexto extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Guarda se a palavra-passe está visível e desenha o olho (só quando [ativo]).
+class _CampoSenha extends StatefulWidget {
+  const _CampoSenha({required this.ativo, required this.construir});
+  final bool ativo;
+  final Widget Function(bool escondido, Widget? olho) construir;
+
+  @override
+  State<_CampoSenha> createState() => _CampoSenhaState();
+}
+
+class _CampoSenhaState extends State<_CampoSenha> {
+  bool _ver = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    if (!widget.ativo) return widget.construir(false, null);
+    return widget.construir(
+      !_ver,
+      IconButton(
+        tooltip: _ver ? 'Esconder palavra-passe' : 'Mostrar palavra-passe',
+        onPressed: () => setState(() => _ver = !_ver),
+        icon: Icone(
+          _ver ? Icones.olhoRiscado : Icones.olho,
+          tamanho: 22,
+          cor: t.texto2,
+        ),
+      ),
     );
   }
 }

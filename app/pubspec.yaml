@@ -39,6 +39,7 @@ dependencies:
   lottie: ^3.8.2
   flutter_svg: ^2.5.0
   http: ^1.6.0
+  flutter_secure_storage: ^11.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -58,6 +59,19 @@ flutter:
 
   assets:
     - assets/lottie/
+
+  # Plus Jakarta Sans (licença OFL em assets/fonts/OFL.txt): a fonte variável serve todos os pesos do design.
+  fonts:
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans-Variable.ttf
+          weight: 800
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

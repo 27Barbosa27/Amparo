@@ -41,10 +41,25 @@ abstract class Repositorio {
     DateTime agora,
   );
 
+  /// Edita o medicamento (nome) e a receita (dose e horário); as tomas futuras ainda por registar refazem-se.
+  Future<void> alterarReceita(
+    String perfilId,
+    Receita antiga,
+    NovaReceita nova,
+  );
+
+  /// Apaga a receita e as tomas dela.
+  Future<void> apagarReceita(String perfilId, String receitaId);
+
   Future<EstadoGeracao> estadoGeracao(String perfilId, String receitaId);
 
   /// Os últimos 7 dias (o último é hoje), para o cartão de adesão.
   Future<List<DiaAdesao>> ultimos7Dias(String perfilId, DateTime agora);
+
+  /// Um código novo (vale 15 minutos, uso único) para ligar o telemóvel da pessoa.
+  Future<CodigoLigacao> criarCodigoLigacao(String perfilId);
+
+  Future<EstadoCodigo> estadoCodigo(String perfilId, String codigoId);
 
   /// Quem cuida da pessoa, para o botão "Ligar à Ana".
   Future<String?> nomeDoCuidador(String perfilId);

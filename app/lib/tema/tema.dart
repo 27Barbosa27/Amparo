@@ -2,8 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'tokens.dart';
 
-/// Tipografia do design: Plus Jakarta Sans. O ficheiro da fonte ainda não está nos assets,
-/// por isso, até estar, o sistema usa a fonte do aparelho (ver README da app).
+/// Tipografia do design: Plus Jakarta Sans (ficheiro em assets/fonts, declarado no pubspec).
 const familiaTexto = 'Plus Jakarta Sans';
 const fontesAlternativas = ['Segoe UI', 'Roboto', 'SF Pro Text', 'sans-serif'];
 
@@ -27,9 +26,12 @@ ThemeData criarTema(Tokens t) {
     fontFamilyFallback: fontesAlternativas,
     extensions: [t],
     splashFactory: NoSplash.splashFactory,
+    // A família tem de ir no `textTheme` (o `fontFamily` do tema só vale para o tema por omissão).
     textTheme: Typography.material2021().black.apply(
       bodyColor: t.texto,
       displayColor: t.texto,
+      fontFamily: familiaTexto,
+      fontFamilyFallback: fontesAlternativas,
     ),
   );
 }
@@ -41,19 +43,24 @@ class Estilos {
   static TextStyle titulo(Tokens t) => TextStyle(
     fontSize: 22,
     height: 1.15,
-    fontWeight: FontWeight.w800,
-    letterSpacing: -0.44,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.55,
     color: t.texto,
   );
-  static TextStyle subtitulo(Tokens t) =>
-      TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: t.texto2);
+  static TextStyle subtitulo(Tokens t) => TextStyle(
+    fontSize: 15,
+    height: 1.5,
+    fontWeight: FontWeight.w500,
+    color: t.texto2,
+  );
   static TextStyle corpo(
     Tokens t, {
     FontWeight peso = FontWeight.w600,
     Color? cor,
+    double altura = 1.4,
   }) => TextStyle(
     fontSize: 15,
-    height: 1.4,
+    height: altura,
     fontWeight: peso,
     color: cor ?? t.texto,
   );

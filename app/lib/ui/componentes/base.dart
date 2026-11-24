@@ -1,6 +1,9 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../tema/tokens.dart';
+import 'estilo.dart';
+import 'icones.dart';
 
 /// O fundo em gradiente do design (escuro em cima, mais claro em baixo).
 class FundoGradiente extends StatelessWidget {
@@ -60,6 +63,9 @@ class Botao extends StatelessWidget {
     required this.texto,
     required this.aoTocar,
     this.icone,
+    this.iconeSvg,
+    this.tamanhoIcone,
+    this.tracoIcone = 2,
     this.fundo,
     this.cor,
     this.contorno,
@@ -71,6 +77,11 @@ class Botao extends StatelessWidget {
   final String texto;
   final VoidCallback? aoTocar;
   final IconData? icone;
+
+  /// Um ícone do design (SVG), em vez do `icone` do Material.
+  final IconeDados? iconeSvg;
+  final double? tamanhoIcone;
+  final double tracoIcone;
   final Color? fundo;
   final Color? cor;
   final Color? contorno;
@@ -82,43 +93,60 @@ class Botao extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.t;
     final corTexto = cor ?? t.sobrePrimaria;
-    return Semantics(
-      button: true,
-      enabled: aoTocar != null,
-      label: texto,
-      excludeSemantics: true,
-      child: Material(
-        color: fundo ?? t.primaria,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(raio),
-          side: contorno == null
-              ? BorderSide.none
-              : BorderSide(color: contorno!, width: 2),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(raio),
-          onTap: aoTocar,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: altura),
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (icone != null) ...[
-                    Icon(icone, size: tamanhoTexto + 5, color: corTexto),
-                    const SizedBox(width: 8),
-                  ],
-                  Flexible(
-                    child: Text(
-                      texto,
-                      style: TextStyle(
-                        fontSize: tamanhoTexto,
-                        fontWeight: FontWeight.w800,
-                        color: corTexto,
+    return Pressionavel(
+      ativo: aoTocar != null,
+      child: Semantics(
+        button: true,
+        enabled: aoTocar != null,
+        label: texto,
+        excludeSemantics: true,
+        child: Material(
+          color: fundo ?? t.primaria,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(raio),
+            side: contorno == null
+                ? BorderSide.none
+                : BorderSide(color: contorno!, width: 2),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(raio),
+            // Vibração leve: confirma o toque a quem não olha para o ecrã.
+            onTap: aoTocar == null
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    aoTocar!();
+                  },
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: altura),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (iconeSvg != null) ...[
+                      Icone(
+                        iconeSvg!,
+                        tamanho: tamanhoIcone ?? tamanhoTexto + 8,
+                        cor: corTexto,
+                        traco: tracoIcone,
+                      ),
+                      const SizedBox(width: 10),
+                    ] else if (icone != null) ...[
+                      Icon(icone, size: tamanhoTexto + 8, color: corTexto),
+                      const SizedBox(width: 10),
+                    ],
+                    Flexible(
+                      child: Text(
+                        texto,
+                        style: TextStyle(
+                          fontSize: tamanhoTexto,
+                          fontWeight: FontWeight.w800,
+                          color: corTexto,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -140,27 +168,31 @@ class Avatar extends StatelessWidget {
   final double tamanho;
   final bool coral;
 
+  /// O design só dá relevo (clay) aos círculos de 48, 52 e 56 px.
+  bool get _comRelevo => tamanho == 48 || tamanho == 52 || tamanho == 56;
+
   @override
   Widget build(BuildContext context) {
     final t = context.t;
-    return ExcludeSemantics(
-      child: Container(
-        width: tamanho,
-        height: tamanho,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: coral ? t.av2 : t.primariaSuave,
-        ),
-        child: Text(
-          inicial,
-          style: TextStyle(
-            fontSize: tamanho * .46,
-            fontWeight: FontWeight.w800,
-            color: coral ? t.sobreAv2 : t.sobrePrimariaSuave,
-          ),
-        ),
+    final cor = coral ? t.av2 : t.primariaSuave;
+    final letra = Text(
+      inicial,
+      style: TextStyle(
+        fontSize: tamanho * .46,
+        fontWeight: FontWeight.w800,
+        color: coral ? t.sobreAv2 : t.sobrePrimariaSuave,
       ),
+    );
+    return ExcludeSemantics(
+      child: _comRelevo
+          ? Relevo(largura: tamanho, altura: tamanho, cor: cor, child: letra)
+          : Container(
+              width: tamanho,
+              height: tamanho,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: cor),
+              child: letra,
+            ),
     );
   }
 }

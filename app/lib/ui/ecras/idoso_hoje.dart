@@ -6,6 +6,8 @@ import '../../estado/hoje_controlador.dart';
 import '../../tema/tema.dart';
 import '../../tema/tokens.dart';
 import '../componentes/base.dart';
+import '../componentes/estilo.dart';
+import '../componentes/icones.dart';
 import 'cuidador_hoje.dart';
 
 /// A cápsula do design (Idoso-Hoje.dc.html).
@@ -15,9 +17,17 @@ const _svgCapsula =
 /// "Hoje" no modo simples: a toma atrasada ou a próxima em destaque, botões grandes, o resto mais abaixo.
 /// É o único modo no telemóvel de uma pessoa ligada por código (e a pré-visualização "ver como a pessoa vê").
 class IdosoHoje extends StatelessWidget {
-  const IdosoHoje({super.key, required this.controlador, this.aoLigar});
+  const IdosoHoje({
+    super.key,
+    required this.controlador,
+    this.aoLigar,
+    this.aoSairDaPreVisualizacao,
+  });
 
   final HojeControlador controlador;
+
+  /// Só na pré-visualização do cuidador: mostra a faixa "A ver como ... vê" com o botão "Sair".
+  final VoidCallback? aoSairDaPreVisualizacao;
 
   /// Ligar ao cuidador (a chamada em si depende do telemóvel).
   final void Function(String nome)? aoLigar;
@@ -40,92 +50,119 @@ class IdosoHoje extends StatelessWidget {
             )
             .toList();
         final cuidador = controlador.nomeCuidador;
-        return SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-            children: [
-              Row(
-                children: [
-                  Expanded(
+        // O texto cresce com a definição da pessoa, em cima da do sistema (que já conta).
+        final media = MediaQuery.of(context);
+        final base = media.textScaler.scale(15) / 15;
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: TextScaler.linear(
+              base * controlador.perfil.tamanhoTexto.escala,
+            ),
+          ),
+          child: SafeArea(
+            // O rodapé ("Ligar à Ana") fica encostado em baixo quando sobra espaço (`margin-top: auto`).
+            child: CustomScrollView(
+              slivers: [
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            '${_saudacao(agora.hour)}, ${controlador.perfil.nome}',
-                            style: TextStyle(
-                              fontSize: 22,
-                              height: 1.15,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.44,
-                              color: t.texto,
+                        ...escalonar([
+                          if (aoSairDaPreVisualizacao != null)
+                            _FaixaPreVisualizacao(
+                              nome: controlador.perfil.nome,
+                              aoSair: aoSairDaPreVisualizacao!,
                             ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Semantics(
+                                      header: true,
+                                      child: Text(
+                                        '${_saudacao(agora.hour)}, ${controlador.perfil.nome}',
+                                        style: Estilos.titulo(t),
+                                      ),
+                                    ),
+                                    Text(
+                                      dataPorExtenso(agora),
+                                      style: Estilos.subtitulo(t),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Avatar(
+                                inicial: controlador.perfil.inicial,
+                                tamanho: 48,
+                              ),
+                            ],
                           ),
-                        ),
-                        Text(
-                          dataPorExtenso(agora),
-                          style: Estilos.subtitulo(t),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Avatar(inicial: controlador.perfil.inicial, tamanho: 48),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _Progresso(feitas: r.tomadas, total: r.total),
-              const SizedBox(height: 18),
-              if (destaque != null)
-                _CartaoDestaque(
-                  controlador: controlador,
-                  toma: destaque,
-                  cuidador: cuidador,
-                )
-              else
-                _TudoFeito(total: r.total),
-              if (depois.isNotEmpty) ...[
-                const SizedBox(height: 18),
-                _MaisTarde(tomas: depois, agora: agora),
-              ],
-              if (cuidador != null && aoLigar != null) ...[
-                const SizedBox(height: 18),
-                Material(
-                  color: t.superficie,
-                  borderRadius: BorderRadius.circular(22),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(22),
-                    onTap: () => aoLigar!(cuidador),
-                    child: Container(
-                      height: 56,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(22),
-                        boxShadow: t.sombra,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Avatar(
-                            inicial: cuidador.substring(0, 1).toUpperCase(),
-                            tamanho: 36,
-                            coral: true,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Ligar à $cuidador',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: t.texto,
+                          _Progresso(feitas: r.tomadas, total: r.total),
+                          if (destaque != null)
+                            _CartaoDestaque(
+                              controlador: controlador,
+                              toma: destaque,
+                              cuidador: cuidador,
+                            )
+                          else
+                            _TudoFeito(total: r.total),
+                          if (depois.isNotEmpty)
+                            _MaisTarde(tomas: depois, agora: agora),
+                        ], espaco: 18),
+                        const Spacer(),
+                        if (cuidador != null && aoLigar != null) ...[
+                          const SizedBox(height: 18),
+                          Pressionavel(
+                            child: Material(
+                              color: t.superficie,
+                              borderRadius: BorderRadius.circular(22),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(22),
+                                onTap: () => aoLigar!(cuidador),
+                                child: Container(
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(22),
+                                    boxShadow: t.sombra,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Avatar(
+                                        inicial: cuidador
+                                            .substring(0, 1)
+                                            .toUpperCase(),
+                                        tamanho: 36,
+                                        coral: true,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Ligar à $cuidador',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: t.texto,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
               ],
-            ],
+            ),
           ),
         );
       },
@@ -146,7 +183,7 @@ class _Progresso extends StatelessWidget {
       children: [
         Text(
           '$feitas de $total tomas feitas',
-          style: Estilos.corpo(t, peso: FontWeight.w700),
+          style: Estilos.corpo(t, peso: FontWeight.w700, altura: 1.5),
         ),
         const SizedBox(height: 8),
         ExcludeSemantics(
@@ -155,12 +192,15 @@ class _Progresso extends StatelessWidget {
               for (var i = 0; i < total; i++) ...[
                 if (i > 0) const SizedBox(width: 6),
                 Expanded(
-                  child: Container(
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: i < feitas ? t.primaria : t.superficie2,
-                      borderRadius: BorderRadius.circular(5),
-                      border: i < feitas ? null : Border.all(color: t.linha),
+                  child: BarraQueCresce(
+                    atraso: Duration(milliseconds: 350 + 100 * i),
+                    child: Container(
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: i < feitas ? t.primaria : t.superficie2,
+                        borderRadius: BorderRadius.circular(5),
+                        border: i < feitas ? null : Border.all(color: t.linha),
+                      ),
                     ),
                   ),
                 ),
@@ -257,21 +297,13 @@ class _CartaoDestaque extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFFFF),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Center(
-                  child: ExcludeSemantics(
-                    child: SvgPicture.string(
-                      _svgCapsula,
-                      width: 48,
-                      height: 48,
-                    ),
-                  ),
+              Relevo(
+                largura: 64,
+                altura: 64,
+                raio: 24,
+                cor: const Color(0xFFFFFFFF),
+                child: ExcludeSemantics(
+                  child: SvgPicture.string(_svgCapsula, width: 48, height: 48),
                 ),
               ),
               const SizedBox(width: 16),
@@ -339,6 +371,7 @@ class _CartaoDestaque extends StatelessWidget {
               'Não tome em dobro.${cuidador == null ? '' : ' Se tiver dúvidas, ligue à $cuidador.'}',
               style: TextStyle(
                 fontSize: 15,
+                height: 1.5,
                 fontWeight: FontWeight.w500,
                 color: corTexto,
               ),
@@ -353,11 +386,11 @@ class _CartaoDestaque extends StatelessWidget {
     final mensagens = ScaffoldMessenger.maybeOf(context);
     final ok = await controlador.marcarTomada(toma);
     if (!ok) return;
-    // "Desfazer" durante 1 minuto, como no plano.
+    // "Desfazer" enquanto o servidor o aceita (janelaDesfazer, 1 minuto).
     mensagens?.hideCurrentSnackBar();
     mensagens?.showSnackBar(
       SnackBar(
-        duration: const Duration(seconds: 8),
+        duration: janelaDesfazer,
         content: Text('${toma.medicamento} marcada como tomada.'),
         action: SnackBarAction(
           label: 'Desfazer',
@@ -497,5 +530,73 @@ class _Quando extends StatelessWidget {
       );
     }
     return Text('Por tomar', style: Estilos.corpo(t, cor: t.texto2));
+  }
+}
+
+/// A faixa de cima da pré-visualização: deixa claro que quem olha é o cuidador, não a pessoa.
+class _FaixaPreVisualizacao extends StatelessWidget {
+  const _FaixaPreVisualizacao({required this.nome, required this.aoSair});
+  final String nome;
+  final VoidCallback aoSair;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        decoration: BoxDecoration(
+          color: t.heroi,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Icone(Icones.olho, tamanho: 22, cor: t.sobreHeroi),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'A ver como $nome vê',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: t.sobreHeroi,
+                ),
+              ),
+            ),
+            Pressionavel(
+              child: Semantics(
+                button: true,
+                label: 'Sair da pré-visualização',
+                excludeSemantics: true,
+                child: Material(
+                  color: const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: aoSair,
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Sair',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0B3B37),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

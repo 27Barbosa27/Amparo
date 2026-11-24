@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../tema/tema.dart';
 import '../../tema/tokens.dart';
 import '../componentes/animacao.dart';
+import '../componentes/estilo.dart';
 import '../componentes/sso.dart';
 
 /// Entrar, como no design: animação de boas-vindas, campos com rótulo por cima, "ou continue com"
@@ -83,246 +85,262 @@ class _EntrarEcraState extends State<EntrarEcra> {
   Widget build(BuildContext context) {
     final t = context.t;
     final comErro = _erro != null;
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
-            children: [
-              Column(
-                children: [
-                  // Com erro, a animação encolhe (150x120), como no design.
-                  AnimacaoLottie(
-                    asset: 'assets/lottie/entrar.json',
-                    largura: comErro ? 150 : 200,
-                    altura: comErro ? 120 : 190,
-                    repetir: true,
-                    descricao: 'Animação de boas-vindas',
-                  ),
-                  const SizedBox(height: 10),
-                  Semantics(
-                    header: true,
-                    child: Text(
-                      'Entrar',
-                      style: TextStyle(
-                        fontSize: 22,
-                        height: 1.15,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.55,
-                        color: t.texto,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Bem-vinda de volta. Entre para ver as tomas.',
-                    textAlign: TextAlign.center,
+    // Os blocos do design, em coluna com `gap: 14`; os dois últimos ficam encostados em baixo.
+    final blocos = <Widget>[
+      Column(
+        children: [
+          // Com erro, a animação encolhe (150x120), como no design.
+          AnimacaoLottie(
+            asset: 'assets/lottie/entrar.json',
+            largura: comErro ? 150 : 200,
+            altura: comErro ? 120 : 190,
+            repetir: true,
+            descricao: 'Animação de boas-vindas',
+          ),
+          const SizedBox(height: 10),
+          Semantics(
+            header: true,
+            child: Text('Entrar', style: Estilos.titulo(t)),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Que bom ver de novo. Entre para ver as tomas.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.45,
+              fontWeight: FontWeight.w500,
+              color: t.texto2,
+            ),
+          ),
+        ],
+      ),
+      if (comErro)
+        Semantics(
+          liveRegion: true,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: t.mauSuave,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, size: 22, color: t.mauTexto),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _erro!,
                     style: TextStyle(
                       fontSize: 15,
-                      height: 1.45,
-                      fontWeight: FontWeight.w500,
-                      color: t.texto2,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              if (comErro) ...[
-                Semantics(
-                  liveRegion: true,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: t.mauSuave,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline, size: 22, color: t.mauTexto),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _erro!,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: t.mauTexto,
-                            ),
-                          ),
-                        ),
-                      ],
+                      fontWeight: FontWeight.w600,
+                      color: t.mauTexto,
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
               ],
-              AutofillGroup(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _Campo(
-                      rotulo: 'Email',
-                      dica: 'nome@exemplo.pt',
-                      controlador: _email,
-                      erro: comErro,
-                      teclado: TextInputType.emailAddress,
-                      autofill: const [AutofillHints.email],
+            ),
+          ),
+        ),
+      AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Campo(
+              rotulo: 'Email',
+              dica: 'nome@exemplo.pt',
+              controlador: _email,
+              erro: comErro,
+              teclado: TextInputType.emailAddress,
+              autofill: const [AutofillHints.email],
+            ),
+            const SizedBox(height: 14),
+            _Campo(
+              rotulo: 'Palavra-passe',
+              dica: 'Palavra-passe',
+              controlador: _senha,
+              erro: comErro,
+              escondido: !_ver,
+              autofill: const [AutofillHints.password],
+              aoSubmeter: _submeter,
+              sufixo: IconButton(
+                tooltip: _ver
+                    ? 'Esconder palavra-passe'
+                    : 'Mostrar palavra-passe',
+                onPressed: () => setState(() => _ver = !_ver),
+                icon: Icon(
+                  _ver
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 22,
+                  color: t.texto2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: InkWell(
+                onTap: widget.aoEsquecerSenha,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 32),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    widthFactor: 1,
+                    child: Text(
+                      'Esqueci-me da palavra-passe',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: t.primaria,
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    _Campo(
-                      rotulo: 'Palavra-passe',
-                      dica: 'Palavra-passe',
-                      controlador: _senha,
-                      erro: comErro,
-                      escondido: !_ver,
-                      autofill: const [AutofillHints.password],
-                      aoSubmeter: _submeter,
-                      sufixo: IconButton(
-                        tooltip: _ver
-                            ? 'Esconder palavra-passe'
-                            : 'Mostrar palavra-passe',
-                        onPressed: () => setState(() => _ver = !_ver),
-                        icon: Icon(
-                          _ver
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 22,
-                          color: t.texto2,
-                        ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      Pressionavel(
+        ativo: !_aEntrar,
+        child: Semantics(
+          button: true,
+          label: 'Entrar',
+          excludeSemantics: true,
+          child: Material(
+            color: t.primaria,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: _aEntrar ? null : _submeter,
+              child: SizedBox(
+                height: 56,
+                child: Center(
+                  child: Text(
+                    _aEntrar ? 'A entrar…' : 'Entrar',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: t.sobrePrimaria,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      Row(
+        children: [
+          Expanded(child: Container(height: 1, color: t.linha)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'ou continue com',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: t.texto2,
+              ),
+            ),
+          ),
+          Expanded(child: Container(height: 1, color: t.linha)),
+        ],
+      ),
+      BotoesSso(
+        aoApple: widget.aoApple ?? () {},
+        aoGoogle: widget.aoGoogle ?? () {},
+      ),
+      Pressionavel(
+        child: InkWell(
+          onTap: widget.aoTerCodigo,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Center(
+              child: Text.rich(
+                TextSpan(
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: t.texto2,
+                  ),
+                  children: [
+                    const TextSpan(text: 'Telemóvel de alguém?'),
+                    const WidgetSpan(child: SizedBox(width: 6)),
+                    TextSpan(
+                      text: 'Tenho um código',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: t.primaria,
                       ),
                     ),
                   ],
                 ),
               ),
-              Align(
-                alignment: Alignment.centerRight,
+            ),
+          ),
+        ),
+      ),
+      Center(
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+              color: t.texto2,
+            ),
+            children: [
+              const TextSpan(text: 'Ainda não tem conta? '),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
                 child: InkWell(
-                  onTap: widget.aoEsquecerSenha,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 32),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      widthFactor: 1,
-                      child: Text(
-                        'Esqueci-me da palavra-passe',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: t.primaria,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Semantics(
-                button: true,
-                label: 'Entrar',
-                excludeSemantics: true,
-                child: Material(
-                  color: t.primaria,
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: _aEntrar ? null : _submeter,
-                    child: SizedBox(
-                      height: 56,
-                      child: Center(
-                        child: Text(
-                          _aEntrar ? 'A entrar…' : 'Entrar',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: t.sobrePrimaria,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(child: Container(height: 1, color: t.linha)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'ou continue com',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: t.texto2,
-                      ),
-                    ),
-                  ),
-                  Expanded(child: Container(height: 1, color: t.linha)),
-                ],
-              ),
-              const SizedBox(height: 14),
-              BotoesSso(
-                aoApple: widget.aoApple ?? () {},
-                aoGoogle: widget.aoGoogle ?? () {},
-              ),
-              const SizedBox(height: 22),
-              InkWell(
-                onTap: widget.aoTerCodigo,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  child: Center(
-                    child: Text.rich(
-                      TextSpan(
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: t.texto2,
-                        ),
-                        children: [
-                          const TextSpan(text: 'Telemóvel de alguém? '),
-                          TextSpan(
-                            text: 'Tenho um código',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: t.primaria,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: Text.rich(
-                  TextSpan(
+                  onTap: widget.aoCriarConta,
+                  child: Text(
+                    'Criar conta',
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: t.texto2,
+                      fontWeight: FontWeight.w800,
+                      color: t.primaria,
                     ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+    Widget bloco(int i) => EntradaSobe(
+      atraso: const Duration(milliseconds: 80) * (i > 7 ? 7 : i),
+      child: blocos[i],
+    );
+    final ultimos = blocos.length - 2;
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: CustomScrollView(
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                // A margem vai dentro do filho: o `SliverFillRemaining` ignora a do `SliverPadding`.
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 44, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const TextSpan(text: 'Ainda não tem conta? '),
-                      WidgetSpan(
-                        alignment: PlaceholderAlignment.baseline,
-                        baseline: TextBaseline.alphabetic,
-                        child: InkWell(
-                          onTap: widget.aoCriarConta,
-                          child: Text(
-                            'Criar conta',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: t.primaria,
-                            ),
-                          ),
-                        ),
-                      ),
+                      for (var i = 0; i < ultimos; i++) ...[
+                        if (i > 0) const SizedBox(height: 14),
+                        bloco(i),
+                      ],
+                      const Spacer(),
+                      const SizedBox(height: 14),
+                      bloco(ultimos),
+                      const SizedBox(height: 14),
+                      bloco(ultimos + 1),
                     ],
                   ),
                 ),

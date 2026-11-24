@@ -5,7 +5,9 @@ import 'package:material_ui/material_ui.dart';
 import 'app.dart';
 import 'dados/api.dart';
 import 'dados/autenticacao.dart';
+import 'dados/ligacao.dart';
 import 'dados/repositorio_api.dart';
+import 'dados/sessao_segura.dart';
 
 /// Escolhas de desenvolvimento, por `--dart-define`:
 ///   API_URL=http://127.0.0.1:3000   endereço da API (no emulador Android é http://10.0.2.2:3000)
@@ -29,15 +31,24 @@ Future<void> main() async {
   final porOmissao = !kIsWeb && defaultTargetPlatform == TargetPlatform.android
       ? 'http://10.0.2.2:3000'
       : 'http://127.0.0.1:3000';
+  // A sessão fica guardada no armazenamento seguro: reabrir a app não pede o login outra vez.
+  final sessao = SessaoSegura();
+  await sessao.carregar();
   final api = ClienteApi(
     base: Uri.parse(_apiUrl.isEmpty ? porOmissao : _apiUrl),
-    sessao: SessaoMemoria(),
+    sessao: sessao,
   );
   runApp(
     AmparoApp(
       repositorio: RepositorioApi(api),
       autenticacao: AutenticacaoApi(api),
-      telaInicial: _tela,
+      // No Chrome, `?tela=...` no endereço faz o mesmo que `--dart-define=TELA=...` (só desenvolvimento).
+      // `?claro=1` abre no tema claro (só desenvolvimento, para comparar com o design).
+      escuroInicial: !(kIsWeb && Uri.base.queryParameters['claro'] == '1'),
+      telaInicial: _tela.isNotEmpty
+          ? _tela
+          : (kIsWeb ? Uri.base.queryParameters['tela'] ?? '' : ''),
+      ligacao: LigacaoApi(api),
       credenciaisDev: credenciais,
     ),
   );

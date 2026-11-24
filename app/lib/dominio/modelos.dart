@@ -8,15 +8,28 @@ const toleranciaAtraso = Duration(minutes: 15);
 const janelaDesfazer = Duration(minutes: 1);
 
 class Perfil {
-  const Perfil({required this.id, required this.nome});
+  const Perfil({
+    required this.id,
+    required this.nome,
+    this.tamanhoTexto = TamanhoTexto.normal,
+  });
 
   final String id;
+
+  /// A definição de texto escolhida para a pessoa (o modo simples aplica-a).
+  final TamanhoTexto tamanhoTexto;
 
   /// Pseudónimo ("Avó Rosa"). Nunca se pede o nome verdadeiro.
   final String nome;
 
   String get inicial => nome.isEmpty ? '?' : nome.substring(0, 1).toUpperCase();
 }
+
+/// O cuidador também pode tomar medicação: o perfil dele tem o mesmo nome que a conta.
+bool eProprioCuidador(Perfil perfil, String? cuidador) =>
+    cuidador != null &&
+    cuidador.trim().isNotEmpty &&
+    perfil.nome.trim().toLowerCase() == cuidador.trim().toLowerCase();
 
 class Toma {
   const Toma({
@@ -112,8 +125,9 @@ class ResumoDia {
   int get total => tomadas + porConfirmar + porTomar + outras;
 }
 
-/// Como correu um dia: tudo tomado, alguma toma esquecida, ou ainda em curso (hoje).
-enum ResultadoDia { tudoTomado, esquecida, emCurso }
+/// Como correu um dia: tudo tomado, alguma toma esquecida, ainda em curso (hoje) ou sem dados
+/// (não havia nenhuma toma: por exemplo, antes de a conta ou a receita existirem).
+enum ResultadoDia { tudoTomado, esquecida, emCurso, semDados }
 
 class DiaAdesao {
   const DiaAdesao({required this.dia, required this.resultado});
@@ -121,16 +135,21 @@ class DiaAdesao {
   final ResultadoDia resultado;
 }
 
-/// Percentagem de adesão dos dias já terminados (tudo tomado / dias terminados).
-int percentagemAdesao(List<DiaAdesao> dias) {
-  final fechados = dias
-      .where((d) => d.resultado != ResultadoDia.emCurso)
+/// Percentagem de adesão dos dias já terminados que TIVERAM tomas. Nula quando ainda não há nenhum
+/// (conta nova): nunca se inventa uma percentagem.
+int? percentagemAdesao(List<DiaAdesao> dias) {
+  final comDados = dias
+      .where(
+        (d) =>
+            d.resultado == ResultadoDia.tudoTomado ||
+            d.resultado == ResultadoDia.esquecida,
+      )
       .toList();
-  if (fechados.isEmpty) return 100;
-  final bons = fechados
+  if (comDados.isEmpty) return null;
+  final bons = comDados
       .where((d) => d.resultado == ResultadoDia.tudoTomado)
       .length;
-  return (bons * 100 / fechados.length).round();
+  return (bons * 100 / comDados.length).round();
 }
 
 // ---------- Pessoas e receitas novas ----------
@@ -138,7 +157,23 @@ int percentagemAdesao(List<DiaAdesao> dias) {
 /// Quem recebe os alarmes: a própria pessoa (liga o telemóvel com um código) ou o cuidador.
 enum AlarmesEm { pessoa, cuidador }
 
-enum TamanhoTexto { normal, grande, muitoGrande }
+enum TamanhoTexto {
+  normal(1),
+  grande(1.15),
+  muitoGrande(1.3);
+
+  const TamanhoTexto(this.escala);
+
+  /// Quanto o texto cresce em relação ao tamanho do design.
+  final double escala;
+
+  /// O valor que a API usa (`normal`, `grande`, `muito_grande`).
+  static TamanhoTexto daApi(Object? v) => switch (v) {
+    'grande' => TamanhoTexto.grande,
+    'muito_grande' => TamanhoTexto.muitoGrande,
+    _ => TamanhoTexto.normal,
+  };
+}
 
 class NovaPessoa {
   const NovaPessoa({
@@ -149,6 +184,32 @@ class NovaPessoa {
   final String nome;
   final AlarmesEm alarmesEm;
   final TamanhoTexto tamanhoTexto;
+}
+
+/// O que se toma: não é só comprimidos. A dose começa na unidade do tipo ("1 comprimido", "5 ml"...).
+enum TipoMedicacao {
+  comprimido('Comprimido', '1 comprimido', ['comprimid']),
+  capsula('Cápsula', '1 cápsula', ['cápsula', 'capsula']),
+  liquido('Xarope ou líquido', '5 ml', [' ml', 'colher', 'xarope']),
+  gotas('Gotas', '5 gotas', ['gota']),
+  injecao('Injeção', '1 injeção', ['injeç', 'injec', 'caneta']),
+  pomada('Pomada ou creme', '1 aplicação', ['aplica', 'pomada', 'creme']),
+  inalador('Inalador', '2 inalações', ['inala', 'puff']),
+  outro('Outro', '1 unidade', []);
+
+  const TipoMedicacao(this.texto, this.doseInicial, this._palavras);
+  final String texto;
+  final String doseInicial;
+  final List<String> _palavras;
+
+  /// O tipo que a dose sugere (a API só guarda a dose): serve para voltar a abrir uma receita.
+  static TipoMedicacao daDose(String dose) {
+    final d = ' ${dose.toLowerCase()}';
+    for (final t in values) {
+      if (t._palavras.any(d.contains)) return t;
+    }
+    return TipoMedicacao.outro;
+  }
 }
 
 /// "Com que frequência?" do formulário (ver o mapa no plano, secção 3.1).
@@ -188,9 +249,11 @@ class NovaReceita {
     required this.minuto,
     required this.duracao,
     this.horasOutra = const [],
+    this.tipo = TipoMedicacao.comprimido,
   });
 
   final String medicamento;
+  final TipoMedicacao tipo;
   final String dose;
   final Frequencia frequencia;
 
@@ -235,9 +298,25 @@ class Receita {
     this.unidadesIniciais,
     this.unidadesRestantes,
     this.diasRestantes,
+    this.medicamentoId = '',
+    this.intervaloHoras,
+    this.horasFixas = const [],
+    this.fracaoTempo,
   });
 
   final String id;
+
+  /// O medicamento a que a receita pertence (para editar o nome).
+  final String medicamentoId;
+
+  /// "De N em N horas": o N. Nulo nas receitas com horas fixas.
+  final double? intervaloHoras;
+
+  /// "08:00", "20:00"... nas receitas com horas fixas.
+  final List<String> horasFixas;
+
+  /// Quanto do tempo da receita ainda falta (0 a 1), para a barra quando não há unidades.
+  final double? fracaoTempo;
   final String medicamento;
   final String dose;
 
@@ -253,7 +332,7 @@ class Receita {
   double? get fracaoRestante {
     final i = unidadesIniciais;
     final r = unidadesRestantes;
-    if (i == null || r == null || i <= 0) return null;
+    if (i == null || r == null || i <= 0) return fracaoTempo;
     return (r / i).clamp(0.0, 1.0);
   }
 
@@ -261,6 +340,55 @@ class Receita {
   bool aAcabar([int limite = 4]) =>
       diasRestantes != null && diasRestantes! <= limite;
 }
+
+extension ReceitaParaEditar on Receita {
+  /// A receita como o formulário a mostra (para editar): a frequência volta a descobrir-se das horas.
+  NovaReceita comoNova() {
+    final horas = horasFixas;
+    final Frequencia f;
+    var hora = 8, minuto = 0;
+    if (intervaloHoras != null) {
+      f = intervaloHoras == 8 ? Frequencia.cadaOitoHoras : Frequencia.outra;
+    } else if (horas.length == 1) {
+      f = Frequencia.umaVezDia;
+    } else if (horas.length == 2 &&
+        (int.parse(horas[0].substring(0, 2)) + 12) % 24 ==
+            int.parse(horas[1].substring(0, 2)) &&
+        horas[0].substring(3) == horas[1].substring(3)) {
+      f = Frequencia.duasVezesDia;
+    } else {
+      f = Frequencia.outra;
+    }
+    if (horas.isNotEmpty) {
+      hora = int.parse(horas.first.substring(0, 2));
+      minuto = int.parse(horas.first.substring(3));
+    }
+    return NovaReceita(
+      medicamento: medicamento,
+      dose: dose,
+      frequencia: f,
+      hora: hora,
+      minuto: minuto,
+      duracao: Duracao.tresMeses,
+      horasOutra: f == Frequencia.outra ? horas : const [],
+      tipo: TipoMedicacao.daDose(dose),
+    );
+  }
+}
+
+/// O código de 6 dígitos que o cuidador mostra para ligar o telemóvel da pessoa.
+class CodigoLigacao {
+  const CodigoLigacao({
+    required this.id,
+    required this.codigo,
+    required this.expiraEm,
+  });
+  final String id;
+  final String codigo;
+  final DateTime expiraEm;
+}
+
+enum EstadoCodigo { aEspera, ligado, expirado }
 
 enum FaseGeracao { aGerar, concluida, falhou }
 

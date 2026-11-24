@@ -38,7 +38,8 @@ const esperarEmail = async () => {
   for (let i = 0; i < 100 && enviados.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
   return enviados[0];
 };
-const tokenDoEmail = (e: Email) => /token=([\w-]+)/.exec(e.texto)![1]!;
+const tokenDoEmail = (e: Email) => /(\d{3}) (\d{3})/.exec(e.texto)!.slice(1, 3).join('');
+const repor = (email: string, codigo: string, senha?: string) => request(app).post('/auth/repor').send({ email, codigo, ...(senha === undefined ? {} : { senha }) });
 async function pedir(email: string) {
   const r = await request(app).post('/auth/recuperar').send({ email });
   expect(r.status).toBe(202);
@@ -46,19 +47,21 @@ async function pedir(email: string) {
 }
 
 describe('Pedir a recuperação', () => {
-  it('envia o email ao endereço da conta, com um link de uso único, e guarda só o hash do token', async () => {
+  it('envia o email ao endereço da conta, com um código de 6 dígitos, e guarda só o hash', async () => {
     const c = await conta();
     await pedir(c.email);
     const e = (await esperarEmail())!;
     expect(e.para).toBe(c.email);
-    expect(e.texto).toContain(`${config.APP_LINK_BASE}?token=`);
+    expect(e.texto).toMatch(/\d{3} \d{3}/);
+    expect(e.texto).not.toContain('http');
     const token = tokenDoEmail(e);
     const { rows } = await db.query('select token_hash, expira_em from password_resets where user_id = $1', [c.id]);
     expect(rows).toHaveLength(1);
     expect(rows[0].token_hash.toString('utf8')).not.toContain(token);
+    expect(token).toMatch(/^\d{6}$/);
     const min = (rows[0].expira_em.getTime() - Date.now()) / 60_000;
-    expect(min).toBeGreaterThan(29);
-    expect(min).toBeLessThanOrEqual(30);
+    expect(min).toBeGreaterThan(4);
+    expect(min).toBeLessThanOrEqual(5);
   });
 
   it('a resposta é igual para conta existente, inexistente e email inválido, e só a existente recebe email', async () => {
@@ -97,15 +100,15 @@ describe('Pedir a recuperação', () => {
     await pedir(c.email);
     const segundo = tokenDoEmail((await esperarEmail())!);
     expect(segundo).not.toBe(primeiro);
-    expect((await request(app).post('/auth/repor').send({ token: primeiro, senha: 'nova-palavra-passe-2' })).status).toBe(400);
-    expect((await request(app).post('/auth/repor').send({ token: segundo, senha: 'nova-palavra-passe-2' })).status).toBe(204);
+    expect((await repor(c.email, primeiro, 'nova-palavra-passe-2')).status).toBe(400);
+    expect((await repor(c.email, segundo, 'nova-palavra-passe-2')).status).toBe(204);
   });
 
-  it('limita os pedidos por conta (3 por hora) sem o revelar', async () => {
+  it('limita os pedidos por conta (15 por hora) sem o revelar', async () => {
     const c = await conta();
-    for (let i = 0; i < 5; i++) expect((await pedir(c.email)).status).toBe(202);
-    await new Promise((r) => setTimeout(r, 100));
-    expect(enviados).toHaveLength(3);
+    for (let i = 0; i < 17; i++) expect((await pedir(c.email)).status).toBe(202);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(enviados).toHaveLength(15);
   });
 
   it('uma falha do servidor de email não chega ao cliente', async () => {
@@ -138,24 +141,24 @@ describe('Repor a palavra-passe', () => {
 
   it('muda a palavra-passe: a nova entra, a antiga deixa de entrar', async () => {
     const { c, token } = await comToken();
-    expect((await request(app).post('/auth/repor').send({ token, senha: 'nova-palavra-passe-2' })).status).toBe(204);
+    expect((await repor(c.email, token, 'nova-palavra-passe-2')).status).toBe(204);
     expect((await request(app).post('/auth/login').send({ email: c.email, senha: 'nova-palavra-passe-2' })).status).toBe(200);
     expect((await request(app).post('/auth/login').send({ email: c.email, senha: 'palavra-passe-antiga-1' })).status).toBe(401);
   });
 
   it('é de uso único', async () => {
-    const { token } = await comToken();
-    expect((await request(app).post('/auth/repor').send({ token, senha: 'nova-palavra-passe-2' })).status).toBe(204);
-    const r = await request(app).post('/auth/repor').send({ token, senha: 'outra-palavra-passe-3' });
+    const { c, token } = await comToken();
+    expect((await repor(c.email, token, 'nova-palavra-passe-2')).status).toBe(204);
+    const r = await repor(c.email, token, 'outra-palavra-passe-3');
     expect(r.status).toBe(400);
     expect(r.body).toEqual({ erro: 'token_invalido' });
   });
 
-  it('expira ao fim de 30 minutos e dá a mesma resposta que um token inventado', async () => {
+  it('expira ao fim de 5 minutos e dá a mesma resposta que um código inventado', async () => {
     const { c, token } = await comToken();
     await db.query("update password_resets set expira_em = now() - interval '1 second' where user_id = $1", [c.id]);
-    const expirado = await request(app).post('/auth/repor').send({ token, senha: 'nova-palavra-passe-2' });
-    const inventado = await request(app).post('/auth/repor').send({ token: 'x'.repeat(43), senha: 'nova-palavra-passe-2' });
+    const expirado = await repor(c.email, token, 'nova-palavra-passe-2');
+    const inventado = await repor(c.email, '000000', 'nova-palavra-passe-2');
     expect(expirado.status).toBe(400);
     expect(expirado.body).toEqual(inventado.body);
   });
@@ -164,22 +167,73 @@ describe('Repor a palavra-passe', () => {
     const { c, token } = await comToken();
     for (let i = 0; i < 5; i++) await request(app).post('/auth/login').send({ email: c.email, senha: 'errada-errada-1' });
     expect((await request(app).post('/auth/login').send({ email: c.email, senha: 'palavra-passe-antiga-1' })).status).toBe(429);
-    await request(app).post('/auth/repor').send({ token, senha: 'nova-palavra-passe-2' });
+    await repor(c.email, token, 'nova-palavra-passe-2');
     expect((await request(app).post('/auth/refresh').send({ refreshToken: c.refresh })).status).toBe(401);
     expect((await request(app).post('/auth/login').send({ email: c.email, senha: 'nova-palavra-passe-2' })).status).toBe(200);
   });
 
   it('valida a nova palavra-passe e não repõe nada se for inválida', async () => {
     const { c, token } = await comToken();
-    expect((await request(app).post('/auth/repor').send({ token, senha: 'curta' })).status).toBe(400);
-    expect((await request(app).post('/auth/repor').send({ token })).status).toBe(400);
+    expect((await repor(c.email, token, 'curta')).status).toBe(400);
+    expect((await repor(c.email, token)).status).toBe(400);
     expect((await request(app).post('/auth/login').send({ email: c.email, senha: 'palavra-passe-antiga-1' })).status).toBe(200);
-    expect((await request(app).post('/auth/repor').send({ token, senha: 'nova-palavra-passe-2' })).status).toBe(204); // o token continua bom
+    expect((await repor(c.email, token, 'nova-palavra-passe-2')).status).toBe(204); // o token continua bom
+  });
+
+  it('5 códigos errados esgotam o código: nem o certo volta a valer', async () => {
+    const { c, token } = await comToken();
+    const errado = token === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i++) expect((await repor(c.email, errado, 'nova-palavra-passe-2')).status).toBe(400);
+    const r = await repor(c.email, token, 'nova-palavra-passe-2');
+    expect(r.status).toBe(400);
+    expect(r.body).toEqual({ erro: 'token_invalido' });
+    expect((await request(app).post('/auth/login').send({ email: c.email, senha: 'palavra-passe-antiga-1' })).status).toBe(200);
+  });
+
+  it('um código errado não gasta o certo (até ao limite)', async () => {
+    const { c, token } = await comToken();
+    const errado = token === '000000' ? '111111' : '000000';
+    await repor(c.email, errado, 'nova-palavra-passe-2');
+    expect((await repor(c.email, token, 'nova-palavra-passe-2')).status).toBe(204);
+  });
+
+  it('o código de uma conta não serve noutra, e email desconhecido responde igual', async () => {
+    const a = await comToken();
+    const b = await conta();
+    const alheio = await repor(b.email, a.token, 'nova-palavra-passe-2');
+    const desconhecido = await repor('nao.existe@exemplo.pt', a.token, 'nova-palavra-passe-2');
+    expect(alheio.status).toBe(400);
+    expect(desconhecido.status).toBe(400);
+    expect(desconhecido.body).toEqual(alheio.body);
+  });
+
+  it('o código tem de ter 6 dígitos', async () => {
+    const { c } = await comToken();
+    expect((await repor(c.email, '12345', 'nova-palavra-passe-2')).status).toBe(400);
+    expect((await repor(c.email, 'abcdef', 'nova-palavra-passe-2')).status).toBe(400);
+  });
+
+  it('verificar confirma o código sem o gastar, e conta as tentativas erradas', async () => {
+    const { c, token } = await comToken();
+    const verificar = (codigo: string) => request(app).post('/auth/recuperar/verificar').send({ email: c.email, codigo });
+    const errado = token === '000000' ? '111111' : '000000';
+    expect((await verificar(errado)).status).toBe(400);
+    expect((await verificar(token)).status).toBe(204);
+    expect((await verificar(token)).status).toBe(204); // não se gasta
+    expect((await repor(c.email, token, 'nova-palavra-passe-2')).status).toBe(204); // e ainda serve para repor
+    expect((await verificar(token)).status).toBe(400); // depois de usado, já não
+  });
+
+  it('verificar também esgota o código ao fim de 5 erros', async () => {
+    const { c, token } = await comToken();
+    const errado = token === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i++) await request(app).post('/auth/recuperar/verificar').send({ email: c.email, codigo: errado });
+    expect((await request(app).post('/auth/recuperar/verificar').send({ email: c.email, codigo: token })).status).toBe(400);
   });
 
   it('a auditoria regista o pedido e a reposição sem emails nem tokens', async () => {
     const { c, token } = await comToken();
-    await request(app).post('/auth/repor').send({ token, senha: 'nova-palavra-passe-2' });
+    await repor(c.email, token, 'nova-palavra-passe-2');
     const { rows } = await db.query("select acao from audit_logs where user_id = $1 and acao like 'auth.%' and acao in ('auth.recuperacao_pedida','auth.senha_reposta') order by id", [c.id]);
     expect(rows.map((r) => r.acao)).toEqual(['auth.recuperacao_pedida', 'auth.senha_reposta']);
     const todos = JSON.stringify((await db.query('select * from audit_logs where user_id = $1', [c.id])).rows);

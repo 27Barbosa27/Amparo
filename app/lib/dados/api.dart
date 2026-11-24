@@ -132,6 +132,13 @@ class ClienteApi {
       } else {
         throw const ErroApi('sessao_expirada', 401);
       }
+    } else if (autenticado &&
+        r.statusCode == 401 &&
+        sessao.acesso != null &&
+        sessao.renovacao == null &&
+        _codigo(r) == 'nao_autenticado') {
+      // O telemóvel de uma pessoa (só tem token de dispositivo) foi desligado pelo cuidador.
+      throw const ErroApi('sessao_expirada', 401);
     }
     if (r.statusCode >= 200 && r.statusCode < 300) {
       if (r.body.isEmpty) return null;

@@ -3,6 +3,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../tema/tokens.dart';
 import '../componentes/animacao.dart';
 import '../componentes/base.dart';
+import '../componentes/icones.dart';
+import '../componentes/resultado.dart';
 import '../componentes/formulario.dart';
 import '../componentes/sso.dart';
 
@@ -166,8 +168,9 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
             const SizedBox(width: 8),
             const AnimacaoLottie(
               asset: 'assets/lottie/registo.json',
-              largura: 120,
-              altura: 120,
+              largura: 150,
+              altura: 150,
+              repetir: true,
               descricao: 'Animação de boas-vindas',
             ),
           ],
@@ -179,6 +182,8 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
           controlador: _nome,
           erro: _erros.nome,
           maxLength: 60,
+          altura: 52,
+          espacoRotulo: 6,
           aoMudar: (_) => setState(
             () => _erros = ErrosRegisto(
               email: _erros.email,
@@ -194,6 +199,8 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
           controlador: _email,
           teclado: TextInputType.emailAddress,
           maxLength: 254,
+          altura: 52,
+          espacoRotulo: 6,
           erro: _emailExiste
               ? 'Já existe uma conta com este email.'
               : _erros.email,
@@ -223,6 +230,7 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
           ),
         const SizedBox(height: 12),
         _CampoSenha(
+          aoSubmeter: _aCriar ? null : _criar,
           controlador: _senha,
           erro: _erros.senha,
           ver: _ver,
@@ -251,13 +259,17 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Checkbox(
-                  value: _termos,
-                  onChanged: (v) => setState(() => _termos = v ?? false),
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: _CaixaMarcar(
+                    key: const ValueKey('caixa-termos'),
+                    marcada: _termos,
+                  ),
                 ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 12),
+                    padding: EdgeInsets.zero,
                     child: Text(
                       'Aceito os Termos, a Política de Privacidade e o tratamento dos dados de saúde para gerir as tomas.',
                       style: TextStyle(
@@ -306,8 +318,7 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
             ),
           ),
         ],
-      ],
-      rodape: [
+        const SizedBox(height: 12),
         Botao(
           texto: _aCriar ? 'A criar…' : 'Criar conta',
           altura: 56,
@@ -315,7 +326,7 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
           tamanhoTexto: 18,
           aoTocar: _aCriar ? null : _criar,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(child: Container(height: 1, color: t.linha)),
@@ -333,12 +344,14 @@ class _CriarContaEcraState extends State<CriarContaEcra> {
             Expanded(child: Container(height: 1, color: t.linha)),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         BotoesSso(
           aoApple: widget.aoApple ?? () {},
           aoGoogle: widget.aoGoogle ?? () {},
         ),
-        const SizedBox(height: 18),
+      ],
+      espacoRodape: 12,
+      rodape: [
         Center(
           child: Text.rich(
             TextSpan(
@@ -394,7 +407,9 @@ class _Voltar extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               boxShadow: t.sombra,
             ),
-            child: Icon(Icons.chevron_left, size: 28, color: t.texto),
+            child: Center(
+              child: Icone(Icones.voltar, tamanho: 24, cor: t.texto),
+            ),
           ),
         ),
       ),
@@ -409,9 +424,11 @@ class _CampoSenha extends StatelessWidget {
     required this.ver,
     required this.aoVer,
     required this.aoMudar,
+    this.aoSubmeter,
   });
   final TextEditingController controlador;
   final String? erro;
+  final VoidCallback? aoSubmeter;
   final bool ver;
   final VoidCallback aoVer;
   final ValueChanged<String> aoMudar;
@@ -435,9 +452,9 @@ class _CampoSenha extends StatelessWidget {
             color: t.texto,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         SizedBox(
-          height: 56,
+          height: 52,
           child: TextField(
             controller: controlador,
             obscureText: !ver,
@@ -445,6 +462,8 @@ class _CampoSenha extends StatelessWidget {
             enableSuggestions: false,
             maxLength: 128,
             autofillHints: const [AutofillHints.newPassword],
+            textInputAction: TextInputAction.done,
+            onSubmitted: aoSubmeter == null ? null : (_) => aoSubmeter!(),
             onChanged: aoMudar,
             style: TextStyle(
               fontSize: 16,
@@ -514,122 +533,90 @@ class SucessoContaEcra extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.t;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Center(
-                child: AnimacaoLottie(
-                  asset: 'assets/lottie/sucesso.json',
-                  largura: 220,
-                  altura: 240,
-                  ultimoFotograma: 112,
-                  descricao: 'Concluído com sucesso',
-                ),
+    return EcraResultado(
+      topo: TopoResultado(
+        titulo: 'Conta criada!',
+        texto: 'Olá, $nome. Já pode adicionar a primeira pessoa.',
+      ),
+      cartao: CartaoResultado(
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: t.primariaSuave,
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(height: 12),
-              Semantics(
-                header: true,
-                child: Text(
-                  'Conta criada!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 26,
-                    height: 1.15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.65,
-                    color: t.texto,
-                  ),
-                ),
+              child: Icone(
+                Icones.escudoVisto,
+                tamanho: 24,
+                cor: t.sobrePrimariaSuave,
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Olá, $nome. Já pode adicionar a primeira pessoa.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  height: 1.45,
-                  fontWeight: FontWeight.w500,
-                  color: t.texto2,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Cartao(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: t.primariaSuave,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        Icons.verified_user_outlined,
-                        size: 24,
-                        color: t.sobrePrimariaSuave,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Conta protegida',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: t.texto,
-                            ),
-                          ),
-                          Text(
-                            'Entrou com email e palavra-passe',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: t.texto2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 28),
-              Botao(
-                texto: 'Adicionar a primeira pessoa',
-                altura: 60,
-                raio: 22,
-                tamanhoTexto: 18,
-                aoTocar: aoAdicionarPessoa,
-              ),
-              const SizedBox(height: 4),
-              TextButton(
-                onPressed: aoDepois,
-                child: SizedBox(
-                  height: 44,
-                  child: Center(
-                    child: Text(
-                      'Fazer isto mais tarde',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: t.texto,
-                      ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Conta protegida',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: t.texto,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Entrou com email e palavra-passe',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: t.texto2,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+      acoes: [
+        Botao(
+          texto: 'Adicionar a primeira pessoa',
+          altura: 60,
+          raio: 22,
+          tamanhoTexto: 18,
+          aoTocar: aoAdicionarPessoa,
+        ),
+        AcaoTexto(texto: 'Fazer isto mais tarde', aoTocar: aoDepois),
+      ],
+    );
+  }
+}
+
+/// A caixa de aceitar do design: 24 px, cantos de 8; marcada fica verde-azulada com o visto.
+class _CaixaMarcar extends StatelessWidget {
+  const _CaixaMarcar({super.key, required this.marcada});
+  final bool marcada;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: marcada ? t.primaria : t.superficie2,
+        borderRadius: BorderRadius.circular(8),
+        border: marcada ? null : Border.all(color: t.texto2, width: 2),
+      ),
+      child: marcada
+          ? Icone(Icones.visto, tamanho: 16, cor: t.sobrePrimaria, traco: 2.6)
+          : null,
     );
   }
 }

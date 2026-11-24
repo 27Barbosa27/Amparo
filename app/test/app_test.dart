@@ -66,7 +66,7 @@ void main() {
         await abrir(tester);
         expect(find.byType(LottieBuilder), findsOneWidget);
         expect(
-          find.text('Bem-vinda de volta. Entre para ver as tomas.'),
+          find.text('Que bom ver de novo. Entre para ver as tomas.'),
           findsOneWidget,
         );
         expect(find.text('Esqueci-me da palavra-passe'), findsOneWidget);
@@ -102,31 +102,35 @@ void main() {
       expect(find.text('1/4'), findsOneWidget);
       expect(find.text('Últimos 7 dias'), findsOneWidget);
       expect(find.text('83% de adesão'), findsOneWidget);
-      expect(find.text('08:00 · Metformina e Vitamina D'), findsOneWidget);
-      expect(find.text('Tomadas às 08:12'), findsOneWidget);
-      // a toma atrasada: hora em destaque, medicamento, dose e o estado "Atrasada há 4 h"
-      expect(find.text('09:00'), findsOneWidget);
+      expect(find.text('Metformina e Vitamina D'), findsOneWidget);
+      expect(find.text('08:00'), findsOneWidget);
+      expect(find.text('Tomada às 08:12'), findsOneWidget);
+      // a toma atrasada: cartão "Por confirmar" com o botão "Confirmar que Maria tomou"
       expect(find.text('Lisinopril'), findsOneWidget);
       expect(find.text('10 mg · de manhã'), findsOneWidget);
-      expect(find.text('Atrasada há 4 h'), findsOneWidget);
-      // a próxima toma (13:00): estado "Agora" e os dois botões compactos
-      expect(find.text('Agora'), findsOneWidget);
-      expect(find.text('Tomada'), findsNWidgets(2));
-      expect(find.text('Saltar'), findsNWidgets(2));
-      expect(find.text('21:00 · Atorvastatina 20 mg'), findsOneWidget);
+      expect(find.text('Por confirmar'), findsOneWidget);
+      expect(find.text('Confirmar que Maria tomou'), findsNWidgets(2));
+      // a próxima toma (13:00): a hora chegou, por isso já aparecem "Ligar" e "Lembrar"
+      expect(find.text('Metformina'), findsOneWidget);
+      expect(find.text('É a hora desta toma'), findsOneWidget);
+      expect(find.text('Ligar a Maria'), findsOneWidget);
+      expect(find.text('Lembrar Maria'), findsOneWidget);
+      // uma toma que ainda está longe: sem botões, só o tempo que falta
+      expect(find.text('Atorvastatina'), findsOneWidget);
+      expect(find.text('Por tomar · faltam 8 h'), findsOneWidget);
     });
 
     testWidgets(
       'marcar a toma atrasada como tomada atualiza o resumo e diz quem a marcou',
       (tester) async {
         await entrar(tester);
-        await tester.tap(find.text('Tomada').first);
+        await tester.tap(find.text('Confirmar que Maria tomou').first);
         await tester.pumpAndSettle();
         // aparece o ecrã de sucesso do design, com a animação, e a pessoa "vê esta marcação"
         expect(find.text('Toma marcada'), findsOneWidget);
         expect(find.byType(LottieBuilder), findsOneWidget);
         expect(find.text('A Maria vê esta marcação'), findsOneWidget);
-        await tester.tap(find.text('Voltar a Hoje'));
+        await tester.tap(find.text('Voltar à página principal'));
         await tester.pumpAndSettle();
         expect(find.text('2/4'), findsOneWidget);
         expect(find.textContaining('Marcada por Ana'), findsOneWidget);
@@ -137,13 +141,13 @@ void main() {
       '"Desfazer registo" no ecrã de sucesso volta a deixar a toma pendente',
       (tester) async {
         await entrar(tester);
-        await tester.tap(find.text('Tomada').first);
+        await tester.tap(find.text('Confirmar que Maria tomou').first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Desfazer registo'));
         await tester.pumpAndSettle();
         expect(find.text('1/4'), findsOneWidget);
         expect(
-          find.text('Tomada'),
+          find.text('Confirmar que Maria tomou'),
           findsNWidgets(2),
         ); // a toma voltou a pendente
       },
@@ -153,46 +157,61 @@ void main() {
       '"Desfazer registo" no ecrã de sucesso volta a deixar a toma pendente',
       (tester) async {
         await entrar(tester);
-        await tester.tap(find.text('Tomada').first);
+        await tester.tap(find.text('Confirmar que Maria tomou').first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Desfazer registo'));
         await tester.pumpAndSettle();
         expect(find.text('1/4'), findsOneWidget);
         expect(
-          find.text('Tomada'),
+          find.text('Confirmar que Maria tomou'),
           findsNWidgets(2),
         ); // a toma voltou a pendente
       },
     );
 
+    testWidgets('diz quem é o cuidador e de quem está a cuidar', (
+      tester,
+    ) async {
+      await entrar(tester);
+      expect(find.text('Olá, Ana'), findsOneWidget);
+      expect(find.text('A cuidar de'), findsOneWidget);
+      expect(find.text('Maria'), findsWidgets);
+    });
+
     testWidgets('trocar de pessoa mostra as tomas dela', (tester) async {
       await entrar(tester);
       await tester.tap(find.widgetWithText(InkWell, 'Maria'));
       await tester.pumpAndSettle();
-      expect(find.text('Quem vai acompanhar?'), findsOneWidget);
+      expect(find.text('Trocar de pessoa'), findsOneWidget);
       await tester.tap(find.text('Manuel'));
       await tester.pumpAndSettle();
-      expect(find.text('Ramipril'), findsOneWidget);
-      expect(find.text('Lisinopril'), findsNothing);
+      expect(
+        find.textContaining('Ramipril', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Lisinopril', findRichText: true),
+        findsNothing,
+      );
     });
 
     testWidgets('a barra em ilha leva a Receitas e a Mais', (tester) async {
       await entrar(tester);
-      await tester.tap(find.byIcon(Icons.description_outlined));
+      await tester.tap(find.byKey(const ValueKey('nav-receitas')));
       await tester.pumpAndSettle();
       expect(find.text('3 medicamentos de Maria'), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.tap(find.byKey(const ValueKey('nav-configurações')));
       await tester.pumpAndSettle();
-      expect(find.text('Ver como a pessoa vê'), findsOneWidget);
+      expect(find.text('Ver como Maria vê'), findsOneWidget);
     });
   });
 
   group('Modo simples (ver como a pessoa vê)', () {
     Future<void> abrirModoSimples(WidgetTester tester) async {
       await entrar(tester);
-      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.tap(find.byKey(const ValueKey('nav-configurações')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Ver como a pessoa vê'));
+      await tester.tap(find.text('Ver como Maria vê'));
       await tester.pumpAndSettle();
     }
 
@@ -204,7 +223,10 @@ void main() {
         expect(find.text('1 de 4 tomas feitas'), findsOneWidget);
         expect(find.text('Atrasada desde as 09:00'), findsOneWidget);
         expect(find.text('há 4 h'), findsOneWidget);
-        expect(find.text('Lisinopril'), findsOneWidget);
+        expect(
+          find.textContaining('Lisinopril', findRichText: true),
+          findsOneWidget,
+        );
         expect(
           find.text('Não tome em dobro. Se tiver dúvidas, ligue à Ana.'),
           findsOneWidget,
@@ -232,6 +254,29 @@ void main() {
       },
     );
 
+    testWidgets('o "Desfazer" fica à vista durante toda a janela de 1 minuto', (
+      tester,
+    ) async {
+      await abrirModoSimples(tester);
+      await tester.tap(find.text('Tomei'));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 45));
+      expect(find.text('Desfazer'), findsOneWidget);
+    });
+
+    testWidgets(
+      'a faixa de cima diz que é uma pré-visualização, e "Sair" volta',
+      (tester) async {
+        await abrirModoSimples(tester);
+        expect(find.text('A ver como Maria vê'), findsOneWidget);
+        expect(find.text('Olá, Ana'), findsNothing);
+        await tester.tap(find.text('Sair'));
+        await tester.pumpAndSettle();
+        // volta ao ecrã de onde se abriu a pré-visualização (Mais)
+        expect(find.text('Ver como Maria vê'), findsOneWidget);
+      },
+    );
+
     testWidgets('saltar não conta como tomada', (tester) async {
       await abrirModoSimples(tester);
       await tester.tap(find.text('Saltar'));
@@ -244,10 +289,10 @@ void main() {
       tester,
     ) async {
       await abrirModoSimples(tester);
-      await tester.tap(find.text('Sair da pré-visualização'));
+      await tester.tap(find.text('Sair'));
       await tester.pumpAndSettle();
       expect(
-        find.text('Ver como a pessoa vê'),
+        find.text('Ver como Maria vê'),
         findsOneWidget,
       ); // volta ao separador de onde veio (Mais)
     });
@@ -259,7 +304,7 @@ void main() {
     ) async {
       await abrir(tester);
       final ctx = tester.element(
-        find.text('Bem-vinda de volta. Entre para ver as tomas.'),
+        find.text('Que bom ver de novo. Entre para ver as tomas.'),
       );
       expect(ctx.t.escuro, isTrue);
       expect(ctx.t.primaria, const Color(0xFF2DD4BF));
@@ -269,11 +314,11 @@ void main() {
       'o interruptor muda para o tema claro (verde-azulado mais escuro)',
       (tester) async {
         await entrar(tester);
-        await tester.tap(find.byIcon(Icons.settings_outlined));
+        await tester.tap(find.byKey(const ValueKey('nav-configurações')));
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(Switch));
+        await tester.tap(find.text('Modo escuro'));
         await tester.pumpAndSettle();
-        final ctx = tester.element(find.text('Mais').first);
+        final ctx = tester.element(find.text('Configurações').first);
         expect(ctx.t.escuro, isFalse);
         expect(ctx.t.primaria, const Color(0xFF0F766E));
       },

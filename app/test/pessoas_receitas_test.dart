@@ -55,7 +55,7 @@ Future<void> abrir(WidgetTester tester, RepositorioMemoria repo) async {
 }
 
 Future<void> irParaReceitas(WidgetTester tester) async {
-  await tester.tap(find.byIcon(Icons.description_outlined));
+  await tester.tap(find.byKey(const ValueKey('nav-receitas')));
   await tester.pumpAndSettle();
 }
 
@@ -324,9 +324,10 @@ void main() {
         expect(find.text('Ramipril 5 mg'), findsOneWidget);
         expect(find.text('1 vez ao dia · 3 meses'), findsOneWidget);
         expect(find.text('Hoje, às 21:00'), findsOneWidget);
-        await tester.tap(find.text('Ver Hoje'));
+        await tester.tap(find.text('Ver página principal'));
         await tester.pumpAndSettle();
-        expect(find.text('21:00 · Ramipril 5 mg 1 comprimido'), findsOneWidget);
+        expect(find.text('Ramipril 5 mg'), findsOneWidget);
+        expect(find.text('1 comprimido'), findsOneWidget);
       },
     );
 

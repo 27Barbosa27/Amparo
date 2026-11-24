@@ -23,6 +23,31 @@ class AutenticacaoMemoria implements Autenticacao {
     return null;
   }
 
+  final pedidosDeRecuperacao = <String>[];
+  String tokenValido = '482915';
+  String? senhaReposta;
+
+  @override
+  Future<String?> pedirRecuperacao(String email) async {
+    pedidosDeRecuperacao.add(email);
+    return null;
+  }
+
+  final verificacoes = <String>[];
+
+  @override
+  Future<String?> verificarCodigo(String email, String codigo) async {
+    verificacoes.add(codigo);
+    return codigo.replaceAll(' ', '') == tokenValido ? null : 'token_invalido';
+  }
+
+  @override
+  Future<String?> reporSenha(String email, String codigo, String senha) async {
+    if (codigo.replaceAll(' ', '') != tokenValido) return 'token_invalido';
+    senhaReposta = senha;
+    return null;
+  }
+
   @override
   Future<bool> restaurar() async => _dentro;
 

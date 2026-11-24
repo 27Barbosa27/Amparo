@@ -4,6 +4,7 @@ import '../../estado/hoje_controlador.dart';
 import '../../tema/tokens.dart';
 import '../componentes/animacao.dart';
 import '../componentes/base.dart';
+import '../componentes/icones.dart';
 import 'cuidador_hoje.dart';
 
 /// "Toma marcada" (design: Sucesso-Marcada). Mostra o que o servidor confirmou, diz que a pessoa vê a marcação
@@ -42,8 +43,7 @@ class SucessoMarcadaEcra extends StatelessWidget {
                     const AnimacaoLottie(
                       asset: 'assets/lottie/sucesso.json',
                       largura: 240,
-                      altura: 260,
-                      ultimoFotograma: 112,
+                      altura: 240,
                       descricao: 'Concluído com sucesso',
                     ),
                     const SizedBox(height: 12),
@@ -108,7 +108,7 @@ class SucessoMarcadaEcra extends StatelessWidget {
                     ),
                     const Spacer(),
                     Botao(
-                      texto: 'Voltar a Hoje',
+                      texto: 'Voltar à página principal',
                       altura: 60,
                       raio: 22,
                       tamanhoTexto: 18,
@@ -118,7 +118,8 @@ class SucessoMarcadaEcra extends StatelessWidget {
                     const SizedBox(height: 8),
                     Botao(
                       texto: 'Desfazer registo',
-                      icone: Icons.undo,
+                      iconeSvg: Icones.desfazer,
+                      tamanhoIcone: 22,
                       altura: 52,
                       raio: 20,
                       fundo: Colors.transparent,
