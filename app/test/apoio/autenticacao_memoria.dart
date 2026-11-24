@@ -12,14 +12,43 @@ class AutenticacaoMemoria implements Autenticacao {
 
   @override
   Future<String?> entrar(String email, String senha) async {
+    if (emailsPorVerificar.contains(email)) return 'email_nao_verificado';
+    _dentro = true;
+    return null;
+  }
+
+  /// Ligado, o registo só abre sessão depois de confirmar o email com [codigoDeVerificacao].
+  bool exigirVerificacao = false;
+  String codigoDeVerificacao = '482915';
+  final emailsPorVerificar = <String>{};
+  final reenvios = <String>[];
+  final tentativasDeVerificacao = <String>[];
+
+  @override
+  Future<String?> registar(String nome, String email, String senha) async {
+    _nomeRegisto = nome;
+    if (exigirVerificacao) {
+      emailsPorVerificar.add(email);
+      return 'verificacao_necessaria';
+    }
     _dentro = true;
     return null;
   }
 
   @override
-  Future<String?> registar(String nome, String email, String senha) async {
+  Future<String?> verificarEmail(String email, String codigo) async {
+    tentativasDeVerificacao.add(codigo);
+    if (codigo.replaceAll(' ', '') != codigoDeVerificacao) {
+      return 'codigo_invalido';
+    }
+    emailsPorVerificar.remove(email);
     _dentro = true;
-    _nomeRegisto = nome;
+    return null;
+  }
+
+  @override
+  Future<String?> reenviarVerificacao(String email) async {
+    reenvios.add(email);
     return null;
   }
 

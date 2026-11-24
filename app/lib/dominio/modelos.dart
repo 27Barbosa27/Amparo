@@ -125,6 +125,79 @@ class ResumoDia {
   int get total => tomadas + porConfirmar + porTomar + outras;
 }
 
+/// Como acabou uma toma, para o histórico: derivado do estado e da hora ([Toma.atrasada]).
+enum ResultadoToma { tomada, saltada, esquecida, porConfirmar, porTomar }
+
+extension HistoricoDaToma on Toma {
+  ResultadoToma resultado(DateTime agora) => switch (estado) {
+    EstadoToma.tomada => ResultadoToma.tomada,
+    EstadoToma.saltada => ResultadoToma.saltada,
+    EstadoToma.falhada => ResultadoToma.esquecida,
+    // Pendente: ainda por tomar, por confirmar (já passou a tolerância) ou, de um dia que acabou, esquecida.
+    EstadoToma.pendente =>
+      agendada.isBefore(DateTime(agora.year, agora.month, agora.day))
+          ? ResultadoToma.esquecida
+          : (atrasada(agora)
+                ? ResultadoToma.porConfirmar
+                : ResultadoToma.porTomar),
+  };
+}
+
+/// Os números de um período do histórico. A adesão conta as tomas que já tinham de estar feitas
+/// (tomadas, saltadas e esquecidas); o que ainda vem a caminho (por confirmar, por tomar) não entra.
+class ResumoHistorico {
+  const ResumoHistorico({
+    required this.tomadas,
+    required this.saltadas,
+    required this.esquecidas,
+    required this.porConfirmar,
+    required this.porTomar,
+  });
+
+  factory ResumoHistorico.de(List<Toma> tomas, DateTime agora) {
+    var tomadas = 0,
+        saltadas = 0,
+        esquecidas = 0,
+        porConfirmar = 0,
+        porTomar = 0;
+    for (final t in tomas) {
+      switch (t.resultado(agora)) {
+        case ResultadoToma.tomada:
+          tomadas++;
+        case ResultadoToma.saltada:
+          saltadas++;
+        case ResultadoToma.esquecida:
+          esquecidas++;
+        case ResultadoToma.porConfirmar:
+          porConfirmar++;
+        case ResultadoToma.porTomar:
+          porTomar++;
+      }
+    }
+    return ResumoHistorico(
+      tomadas: tomadas,
+      saltadas: saltadas,
+      esquecidas: esquecidas,
+      porConfirmar: porConfirmar,
+      porTomar: porTomar,
+    );
+  }
+
+  final int tomadas;
+  final int saltadas;
+  final int esquecidas;
+  final int porConfirmar;
+  final int porTomar;
+
+  int get total => tomadas + saltadas + esquecidas + porConfirmar + porTomar;
+
+  /// Percentagem de adesão, ou nulo quando ainda não há nenhuma toma a avaliar (nunca se inventa uma).
+  int? get adesao {
+    final avaliadas = tomadas + saltadas + esquecidas;
+    return avaliadas == 0 ? null : (tomadas * 100 / avaliadas).round();
+  }
+}
+
 /// Como correu um dia: tudo tomado, alguma toma esquecida, ainda em curso (hoje) ou sem dados
 /// (não havia nenhuma toma: por exemplo, antes de a conta ou a receita existirem).
 enum ResultadoDia { tudoTomado, esquecida, emCurso, semDados }

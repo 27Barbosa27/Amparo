@@ -11,6 +11,9 @@ abstract class Repositorio {
   /// As tomas do dia (da meia-noite à meia-noite local) de `agora`.
   Future<List<Toma>> tomasDeHoje(String perfilId, DateTime agora);
 
+  /// As tomas entre duas datas (para o histórico; no máximo 92 dias de cada vez), da mais antiga à mais recente.
+  Future<List<Toma>> historico(String perfilId, DateTime de, DateTime ate);
+
   /// `hora` é a hora real da toma ("Agora", "Há 1 hora", "À hora prevista", "Outra hora"). Por omissão, agora.
   /// `porCuidador` é o nome de quem registou, se foi um cuidador.
   Future<Toma> marcarTomada(

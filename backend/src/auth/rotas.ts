@@ -10,7 +10,8 @@ import { pedirRecuperacao, reporSenha, verificarCodigo } from './recuperacao.js'
 import { enviadorEmailNulo, type EnviadorEmail } from '../email/enviador.js';
 import { criarVerificadorExterno, entrarComFornecedor, type Provedor, type VerificadorExterno } from './externo.js';
 import { exigirAutenticacao } from './middleware.js';
-import { entrar, perfilDoUtilizador, registar, renovar, sair } from './servico.js';
+import { criarConta, entrar, perfilDoUtilizador, registar, renovar, sair } from './servico.js';
+import { confirmarEmail, enviarCodigoVerificacao, reenviarCodigoVerificacao } from './verificacao.js';
 
 /** Versão do texto de consentimento que a app mostra (guardada junto do utilizador). */
 export const VERSAO_CONSENTIMENTO_ATUAL = '2026-11';
@@ -45,6 +46,7 @@ const apagarSchema = z.object({ senha: z.string().max(128).optional(), confirmar
 const recuperarSchema = z.object({ email: emailSchema });
 const verificarSchema = z.object({ email: emailSchema, codigo: z.string().regex(/^\d{6}$/) });
 const reporSchema = z.object({ email: emailSchema, codigo: z.string().regex(/^\d{6}$/), senha: senhaSchema });
+const verificarEmailSchema = z.object({ email: emailSchema, codigo: z.string().regex(/^\d{6}$/) });
 const refreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
 
 export interface OpcoesAuth {
@@ -54,16 +56,20 @@ export interface OpcoesAuth {
   verificadorExterno?: VerificadorExterno;
   /** Envia o email de recuperação de palavra-passe (os testes passam um falso). */
   enviadorEmail?: EnviadorEmail;
+  /** Exige confirmar o email com um código antes de abrir a sessão. Por omissão vem da configuração (`EXIGIR_VERIFICACAO_EMAIL`, sim). */
+  exigirVerificacaoEmail?: boolean;
 }
 
 export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Router {
   const segredos = { jwtSecret: config.JWT_SECRET, emailPepper: config.EMAIL_PEPPER, emailChave: lerChave(config.EMAIL_ENC_KEY) };
   const router = Router();
 
+  const exigirVerificacao = opcoes.exigirVerificacaoEmail ?? config.EXIGIR_VERIFICACAO_EMAIL;
+  const enviador = opcoes.enviadorEmail ?? enviadorEmailNulo;
   const limite = opcoes.limitarPorIp ?? { janelaMs: 60_000, maximo: 20 };
   if (limite) {
     router.use(
-      ['/registo', '/register', '/login', '/refresh', '/apple', '/google', '/recuperar', '/repor'],
+      ['/registo', '/register', '/login', '/refresh', '/apple', '/google', '/recuperar', '/repor', '/verificar-email', '/reenviar-verificacao'],
       rateLimit({
         windowMs: limite.janelaMs,
         limit: limite.maximo,
@@ -78,18 +84,44 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
 
   router.post(['/registo', '/register'], async (req, res) => {
     const d = registoSchema.parse(req.body);
-    const { userId, sessao } = await registar(
-      db,
-      { email: d.email, senha: d.senha, nome: d.nome, consentimentoVersao: d.consentimentoVersao },
-      segredos,
-      req.ip,
-    );
-    res.status(201).json({ utilizador: { id: userId, nome: d.nome }, ...sessao });
+    const dados = { email: d.email, senha: d.senha, nome: d.nome, consentimentoVersao: d.consentimentoVersao };
+    if (!exigirVerificacao) {
+      const { userId, sessao } = await registar(db, dados, segredos, req.ip);
+      res.status(201).json({ utilizador: { id: userId, nome: d.nome }, ...sessao });
+      return;
+    }
+    // Sem sessão: primeiro prova-se que o email é de quem se registou, com o código que vai por email.
+    const userId = await criarConta(db, dados, segredos, false, req.ip);
+    await enviarCodigoVerificacao(db, userId, d.email.trim(), segredos, enviador, req.ip);
+    res.status(201).json({ utilizador: { id: userId, nome: d.nome }, verificacaoNecessaria: true });
+  });
+
+  router.post('/verificar-email', async (req, res) => {
+    const d = verificarEmailSchema.parse(req.body);
+    const { userId, nome, sessao } = await confirmarEmail(db, d.email, d.codigo, segredos, req.ip);
+    res.json({ utilizador: { id: userId, nome }, ...sessao });
+  });
+
+  router.post('/reenviar-verificacao', async (req, res) => {
+    const d = recuperarSchema.safeParse(req.body);
+    // Resposta igual para tudo (conta que existe ou não, verificada ou não, até um email mal formado).
+    if (d.success) await reenviarCodigoVerificacao(db, d.data.email, segredos, enviador, req.ip);
+    res.status(202).json({ mensagem: 'Se existir uma conta por verificar com esse email, enviámos um código novo.' });
   });
 
   router.post('/login', async (req, res) => {
     const d = loginSchema.parse(req.body);
-    const { userId, sessao } = await entrar(db, d.email, d.senha, segredos, req.ip);
+    let entrada;
+    try {
+      entrada = await entrar(db, d.email, d.senha, segredos, req.ip);
+    } catch (e) {
+      // Palavra-passe certa, email por verificar: manda-se um código novo e a app pede-o.
+      if (e instanceof ErroAuth && e.codigo === 'email_nao_verificado') {
+        await reenviarCodigoVerificacao(db, d.email, segredos, enviador, req.ip);
+      }
+      throw e;
+    }
+    const { userId, sessao } = entrada;
     const perfil = await perfilDoUtilizador(db, userId);
     res.json({ utilizador: { id: userId, nome: perfil?.nome ?? null }, ...sessao });
   });

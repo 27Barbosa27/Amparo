@@ -65,6 +65,7 @@ class ReceitasEcra extends StatelessWidget {
             )
           else if (controlador.erro != null)
             Cartao(
+              raio: 5,
               cor: t.mauSuave,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,6 +116,7 @@ class ReceitasEcra extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Cartao(
+                    raio: 5,
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Column(
                       children: [
@@ -137,6 +139,7 @@ class ReceitasEcra extends StatelessWidget {
               )
             else if (urgente == null)
               Cartao(
+                raio: 5,
                 child: Text('Ainda não há receitas.', style: Estilos.corpo(t)),
               ),
             // Cheio, com a cor principal: sobre o fundo escuro um botão da cor da superfície quase desaparecia.
@@ -187,7 +190,7 @@ class _AvisoAAcabar extends StatelessWidget {
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
           color: t.avisoSuave,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(5),
           boxShadow: t.sombra,
         ),
         child: Column(
@@ -370,7 +373,11 @@ class MaisEcra extends StatelessWidget {
     this.aoMudarDePerfil,
     this.proprio = false,
     this.aoTelemoveisLigados,
+    this.aoHistorico,
   });
+
+  /// "Histórico de tomas": abre o ecrã do histórico.
+  final VoidCallback? aoHistorico;
 
   /// "Telemóveis ligados": mostra um código para ligar o telemóvel da pessoa.
   final VoidCallback? aoTelemoveisLigados;
@@ -579,7 +586,9 @@ class MaisEcra extends StatelessWidget {
           ),
           child: Pressionavel(
             child: InkWell(
-              onTap: () => _emBreve(context, 'O histórico de tomas'),
+              onTap:
+                  aoHistorico ??
+                  () => _emBreve(context, 'O histórico de tomas'),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 60),
                 child: Row(

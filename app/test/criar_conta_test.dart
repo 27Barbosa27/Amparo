@@ -291,16 +291,31 @@ void main() {
         await criar(tester);
         expect(find.text('Conta criada!'), findsOneWidget);
         expect(
-          find.text('Olá, Ana. Já pode adicionar a primeira pessoa.'),
+          find.text(
+            'Olá, Ana. Pode usar o Amparo só para si ou acompanhar outra pessoa.',
+          ),
           findsOneWidget,
         );
         expect(find.text('Conta protegida'), findsOneWidget);
-        await tester.tap(find.text('Adicionar a primeira pessoa'));
+        await tester.tap(find.text('Acompanhar outra pessoa'));
         await tester.pumpAndSettle();
         expect(
           find.text('Nome ou apelido'),
           findsOneWidget,
         ); // o formulário de pessoa
+      },
+    );
+
+    testWidgets(
+      '"Usar só para mim" abre a página principal com o próprio cuidador',
+      (tester) async {
+        await abrir(tester);
+        await preencher(tester);
+        await criar(tester);
+        await tester.tap(find.text('Usar só para mim'));
+        await tester.pumpAndSettle();
+        expect(find.text('Olá, Ana'), findsOneWidget);
+        expect(find.text('A minha medicação'), findsOneWidget);
       },
     );
 

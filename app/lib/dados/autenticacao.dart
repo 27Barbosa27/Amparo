@@ -5,9 +5,17 @@ abstract class Autenticacao {
   /// Devolve o código de erro estável (`credenciais_invalidas`, `demasiadas_tentativas`, `sem_rede`...) ou nulo se entrou.
   Future<String?> entrar(String email, String senha);
 
-  /// Cria a conta de cuidador (com o consentimento) e abre a sessão. Devolve o código de erro
-  /// (`email_ja_existe`, `pedido_invalido`, `sem_rede`...) ou nulo se correu bem.
+  /// Cria a conta de cuidador (com o consentimento). O servidor envia um código para o email: devolve
+  /// `verificacao_necessaria` (a conta só abre sessão depois de o confirmar), ou o código de erro
+  /// (`email_ja_existe`, `pedido_invalido`, `sem_rede`...), ou nulo se já abriu sessão.
   Future<String?> registar(String nome, String email, String senha);
+
+  /// Confirma o email com o código de 6 números e abre a sessão. Devolve `codigo_invalido` (errado, expirado,
+  /// usado ou esgotado), `sem_rede`..., ou nulo se correu bem.
+  Future<String?> verificarEmail(String email, String codigo);
+
+  /// Pede outro código de verificação (resposta sempre igual, exista a conta ou não).
+  Future<String?> reenviarVerificacao(String email);
 
   /// Entra (ou cria a conta) com o ID token da Google. Se a conta é nova e `aceitaTermos` é falso, devolve
   /// `consentimento_necessario`: a app pede o consentimento e repete. Outros erros: `provedor_invalido`,
@@ -112,11 +120,51 @@ class AutenticacaoApi implements Autenticacao {
         },
         autenticado: false,
       );
+      // Com a verificação do email ligada o servidor não abre sessão: manda um código para o email.
+      if (j!['verificacaoNecessaria'] == true) return 'verificacao_necessaria';
+      await _api.sessao.guardar(
+        acesso: j['accessToken'] as String,
+        renovacao: j['refreshToken'] as String,
+      );
+      _nome = (j['utilizador'] as Map)['nome'] as String? ?? nome;
+      return null;
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+  }
+
+  @override
+  Future<String?> verificarEmail(String email, String codigo) async {
+    try {
+      final j = await _api.pedir(
+        'POST',
+        '/auth/verificar-email',
+        corpo: {
+          'email': email.trim(),
+          'codigo': codigo.replaceAll(RegExp(r'\s'), ''),
+        },
+        autenticado: false,
+      );
       await _api.sessao.guardar(
         acesso: j!['accessToken'] as String,
         renovacao: j['refreshToken'] as String,
       );
-      _nome = (j['utilizador'] as Map)['nome'] as String? ?? nome;
+      _nome = (j['utilizador'] as Map)['nome'] as String?;
+      return null;
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+  }
+
+  @override
+  Future<String?> reenviarVerificacao(String email) async {
+    try {
+      await _api.pedir(
+        'POST',
+        '/auth/reenviar-verificacao',
+        corpo: {'email': email.trim()},
+        autenticado: false,
+      );
       return null;
     } on ErroApi catch (e) {
       return e.codigo;

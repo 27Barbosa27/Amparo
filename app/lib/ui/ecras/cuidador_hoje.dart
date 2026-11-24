@@ -139,7 +139,7 @@ class _CuidadorHojeState extends State<CuidadorHoje> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: escalonar(blocos, espaco: 14),
@@ -620,24 +620,34 @@ class _LinhaDoTempo extends StatelessWidget {
     return Semantics(
       container: true,
       label: 'Ao longo do dia',
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 108),
-        children: [
-          for (var i = 0; i < tomas.length; i++)
-            itemQueSobe(
-              i,
-              _ItemTempo(
-                controlador: controlador,
-                proprio: proprio,
-                toma: tomas[i],
-                ultima: i == tomas.length - 1,
-                proxima: tomas[i].id == proxima?.id,
-                aoAbrirDetalhe: aoAbrirDetalhe,
-                aoLigar: aoLigar,
-                aoLembrar: aoLembrar,
+      // Os cards esbatem-se ao chegar ao resumo (em vez de serem cortados a direito): só o topo da lista.
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (r) => LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: const [Color(0x00000000), Color(0xFF000000)],
+          stops: [0, r.height <= 0 ? 1 : (30 / r.height).clamp(0.0, 1.0)],
+        ).createShader(r),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 108),
+          children: [
+            for (var i = 0; i < tomas.length; i++)
+              itemQueSobe(
+                i,
+                _ItemTempo(
+                  controlador: controlador,
+                  proprio: proprio,
+                  toma: tomas[i],
+                  ultima: i == tomas.length - 1,
+                  proxima: tomas[i].id == proxima?.id,
+                  aoAbrirDetalhe: aoAbrirDetalhe,
+                  aoLigar: aoLigar,
+                  aoLembrar: aoLembrar,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -98,14 +98,22 @@ export async function entrarComFornecedor(
     const hash = id.email && id.emailVerificado ? hashEmail(id.email, segredos.emailPepper) : null;
     const porEmail = hash ? await db.query<{ id: string }>('select id from users where email_hash = $1', [hash]) : null;
     userId = porEmail?.rows[0]?.id;
+    if (userId) {
+      // O Google prova que o email é desta pessoa. Se a conta nunca foi verificada, quem a registou antes
+      // não era o dono do email: confirma-se e anula-se a palavra-passe que essa pessoa pôs.
+      await db.query(
+        'update users set email_verificado_em = now(), password_hash = null where id = $1 and email_verificado_em is null',
+        [userId],
+      );
+    }
 
     if (!userId) {
       if (extras.aceitaTermos !== true) throw new ErroAuth('consentimento_necessario', 400);
       const email = id.email && id.emailVerificado ? normalizarEmail(id.email) : null;
       const c = await db.query<{ id: string }>(
-        `insert into users (email_hash, email_cifrado, nome_exibicao, consentimento_versao, consentimento_em)
-         values ($1, $2, $3, $4, now()) returning id`,
-        [hash, email ? cifrar(email, segredos.emailChave) : null, extras.nome?.trim() || null, extras.consentimentoVersao],
+        `insert into users (email_hash, email_cifrado, nome_exibicao, consentimento_versao, consentimento_em, email_verificado_em)
+         values ($1, $2, $3, $4, now(), case when $5 then now() end) returning id`,
+        [hash, email ? cifrar(email, segredos.emailChave) : null, extras.nome?.trim() || null, extras.consentimentoVersao, email !== null],
       );
       userId = c.rows[0]!.id;
       novo = true;

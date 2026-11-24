@@ -23,6 +23,11 @@ const schema = z.object({
     .string()
     .optional()
     .transform((v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : [])),
+  /** Exige confirmar o email com um código antes de abrir a sessão no registo. Por omissão sim; os testes (`vitest.config.ts`) desligam-no. */
+  EXIGIR_VERIFICACAO_EMAIL: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   /** Servidor SMTP para os emails (recuperação de palavra-passe), ex.: smtps://utilizador:segredo@smtp.exemplo.com:465. Sem isto, não se envia email. */
   SMTP_URL: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(3).default('Amparo <nao-responder@amparo.example>'),

@@ -24,11 +24,13 @@ import 'ui/ecras/adicionar_pessoa.dart';
 import 'ui/ecras/criar_conta.dart';
 import 'ui/ecras/cuidador_hoje.dart';
 import 'ui/ecras/entrar.dart';
+import 'ui/ecras/historico_tomas.dart';
 import 'ui/ecras/idoso_hoje.dart';
 import 'ui/ecras/ligar_telemovel.dart';
 import 'ui/ecras/outros.dart';
 import 'ui/ecras/receita_nova.dart';
 import 'ui/ecras/recuperar_senha.dart';
+import 'ui/ecras/verificar_email.dart';
 import 'ui/ecras/sucesso_marcada.dart';
 
 /// A raiz da app. Recebe o repositório (dados falsos por agora, a API depois) e o relógio (para os testes).
@@ -342,6 +344,11 @@ class _AmparoAppState extends State<AmparoApp> {
   /// Entra pela API (ou pelos dados falsos) e abre a primeira pessoa. Devolve o código de erro, se houver.
   Future<String?> _entrar(String email, String senha) async {
     final erro = await widget.autenticacao.entrar(email, senha);
+    // A palavra-passe está certa mas o email nunca foi confirmado: o servidor reenviou o código.
+    if (erro == 'email_nao_verificado') {
+      _verificarEmail(email);
+      return null;
+    }
     if (erro != null) return erro;
     try {
       await _abrirSessao();
@@ -440,6 +447,72 @@ class _AmparoAppState extends State<AmparoApp> {
     );
   }
 
+  /// Depois de a conta abrir sessão (com ou sem verificação): carrega as pessoas e mostra "Conta criada".
+  Future<String?> _concluirRegisto(String nome) async {
+    try {
+      _perfis = await widget.repositorio.perfis();
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+    if (_perfis.isEmpty) {
+      _modo = _Modo.semPessoas;
+    } else {
+      _abrirPerfil(_perfis.first);
+      _modo = _Modo.cuidador;
+    }
+    if (mounted) setState(() {});
+    _navegador.currentState?.pushReplacement(
+      rotaPagina<void>(
+        Builder(
+          builder: (c2) => SucessoContaEcra(
+            nome: nome,
+            aoAdicionarPessoa: () {
+              Navigator.of(c2).popUntil((r) => r.isFirst);
+              final raiz = _navegador.currentContext;
+              if (raiz != null && raiz.mounted) _adicionarPessoa(raiz);
+            },
+            aoDepois: () => Navigator.of(c2).popUntil((r) => r.isFirst),
+            aoSoParaMim: () {
+              Navigator.of(c2).popUntil((r) => r.isFirst);
+              final raiz = _navegador.currentContext;
+              if (raiz != null && raiz.mounted) _usarSoParaMim(raiz);
+            },
+          ),
+        ),
+      ),
+    );
+    return null;
+  }
+
+  /// "Confirme o seu email": o código de 6 números que o servidor enviou. Vem de um registo novo (`nome`)
+  /// ou de uma tentativa de entrar com a conta por confirmar.
+  void _verificarEmail(String email, {String? nome, bool substituir = false}) {
+    final ecra = rotaPagina<void>(
+      VerificarEmailEcra(
+        email: email,
+        aoReenviar: widget.autenticacao.reenviarVerificacao,
+        aoVerificar: (codigo) async {
+          final erro = await widget.autenticacao.verificarEmail(email, codigo);
+          if (erro != null) return erro;
+          if (nome != null) return _concluirRegisto(nome);
+          try {
+            await _abrirSessao();
+          } on ErroApi catch (e) {
+            return e.codigo;
+          }
+          _navegador.currentState?.popUntil((r) => r.isFirst);
+          return null;
+        },
+      ),
+    );
+    final nav = _navegador.currentState;
+    if (substituir) {
+      nav?.pushReplacement(ecra);
+    } else {
+      nav?.push(ecra);
+    }
+  }
+
   /// "Criar conta": regista o cuidador, abre a sessão e oferece adicionar a primeira pessoa.
   void _criarConta(BuildContext context) {
     Navigator.of(context).push(
@@ -459,39 +532,13 @@ class _AmparoAppState extends State<AmparoApp> {
                 email,
                 senha,
               );
+              // O servidor mandou um código para o email: a conta só abre depois de o confirmar.
+              if (erro == 'verificacao_necessaria') {
+                _verificarEmail(email, nome: nome, substituir: true);
+                return null;
+              }
               if (erro != null) return erro;
-              try {
-                _perfis = await widget.repositorio.perfis();
-              } on ErroApi catch (e) {
-                return e.codigo;
-              }
-              if (_perfis.isEmpty) {
-                _modo = _Modo.semPessoas;
-              } else {
-                _abrirPerfil(_perfis.first);
-                _modo = _Modo.cuidador;
-              }
-              if (mounted) setState(() {});
-              if (!ctx.mounted) return null;
-              Navigator.of(ctx).pushReplacement(
-                rotaPagina<void>(
-                  Builder(
-                    builder: (c2) => SucessoContaEcra(
-                      nome: nome,
-                      aoAdicionarPessoa: () {
-                        Navigator.of(c2).popUntil((r) => r.isFirst);
-                        final raiz = _navegador.currentContext;
-                        if (raiz != null && raiz.mounted) {
-                          _adicionarPessoa(raiz);
-                        }
-                      },
-                      aoDepois: () =>
-                          Navigator.of(c2).popUntil((r) => r.isFirst),
-                    ),
-                  ),
-                ),
-              );
-              return null;
+              return _concluirRegisto(nome);
             },
           ),
         ),
@@ -780,6 +827,16 @@ class _AmparoAppState extends State<AmparoApp> {
             aoMudarDePerfil: () => _trocarPerfil(context),
             aoTelemoveisLigados: () =>
                 _ligarTelemovel(context, _controlador!.perfil),
+            aoHistorico: () => Navigator.of(context).push(
+              rotaPagina<void>(
+                HistoricoTomasEcra(
+                  repositorio: widget.repositorio,
+                  perfil: _controlador!.perfil,
+                  cuidador: widget.autenticacao.nome,
+                  relogio: widget.relogio,
+                ),
+              ),
+            ),
             escuro: _escuro,
             aoMudarTema: (v) => setState(() => _escuro = v),
             aoVerComoAPessoaVe: () =>

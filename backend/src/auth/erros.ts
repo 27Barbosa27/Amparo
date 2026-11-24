@@ -17,7 +17,8 @@ export class ErroAuth extends Error {
       | 'desfazer_expirado'
       | 'hora_invalida'
       | 'senha_incorreta'
-      | 'token_invalido',
+      | 'token_invalido'
+      | 'email_nao_verificado',
     public readonly estado: number,
   ) {
     super(codigo);

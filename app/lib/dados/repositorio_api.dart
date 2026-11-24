@@ -81,6 +81,10 @@ class RepositorioApi implements Repositorio {
   }
 
   @override
+  Future<List<Toma>> historico(String perfilId, DateTime de, DateTime ate) =>
+      _entre(perfilId, de, ate);
+
+  @override
   Future<List<Toma>> tomasDeHoje(String perfilId, DateTime agora) {
     final inicio = DateTime(agora.year, agora.month, agora.day);
     return _entre(

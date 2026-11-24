@@ -70,11 +70,24 @@ export async function registar(
   segredos: SegredosAuth,
   ip?: string,
 ): Promise<{ userId: string; sessao: Sessao }> {
+  const userId = await criarConta(db, dados, segredos, true, ip);
+  return { userId, sessao: await abrirSessao(db, userId, segredos) };
+}
+
+/**
+ * Cria a conta. Com `verificado` falso (o normal) o email fica por verificar e não se abre sessão. Se o email já
+ * existe MAS nunca foi verificado, quem o registou antes nunca provou que era dele: a conta passa para quem
+ * se regista agora (nova palavra-passe, novo nome), e o código vai para o email.
+ */
+export async function criarConta(db: Db, dados: DadosRegisto, segredos: SegredosAuth, verificado: boolean, ip?: string): Promise<string> {
   const senhaHash = await hashSenha(dados.senha);
   const { rows } = await db.query<{ id: string }>(
-    `insert into users (email_hash, email_cifrado, password_hash, nome_exibicao, consentimento_versao, consentimento_em)
-     values ($1, $2, $3, $4, $5, now())
-     on conflict (email_hash) do nothing
+    `insert into users (email_hash, email_cifrado, password_hash, nome_exibicao, consentimento_versao, consentimento_em, email_verificado_em)
+     values ($1, $2, $3, $4, $5, now(), case when $6 then now() end)
+     on conflict (email_hash) do update
+       set password_hash = excluded.password_hash, nome_exibicao = excluded.nome_exibicao,
+           consentimento_versao = excluded.consentimento_versao, consentimento_em = now(), falhas_login = 0, bloqueado_ate = null
+       where users.email_verificado_em is null and users.password_hash is not null
      returning id`,
     [
       hashEmail(dados.email, segredos.emailPepper),
@@ -82,12 +95,13 @@ export async function registar(
       senhaHash,
       dados.nome.trim(),
       dados.consentimentoVersao,
+      verificado,
     ],
   );
   const userId = rows[0]?.id;
   if (!userId) throw new ErroAuth('email_ja_existe', 409);
   await auditar(db, 'auth.registo', userId, ip);
-  return { userId, sessao: await abrirSessao(db, userId, segredos) };
+  return userId;
 }
 
 interface LinhaUser {
@@ -95,6 +109,7 @@ interface LinhaUser {
   password_hash: string | null;
   falhas_login: number;
   bloqueado_ate: Date | null;
+  email_verificado_em: Date | null;
 }
 
 export async function entrar(
@@ -105,7 +120,7 @@ export async function entrar(
   ip?: string,
 ): Promise<{ userId: string; sessao: Sessao }> {
   const { rows } = await db.query<LinhaUser>(
-    'select id, password_hash, falhas_login, bloqueado_ate from users where email_hash = $1',
+    'select id, password_hash, falhas_login, bloqueado_ate, email_verificado_em from users where email_hash = $1',
     [hashEmail(email, segredos.emailPepper)],
   );
   const user = rows[0];
@@ -135,6 +150,11 @@ export async function entrar(
   }
 
   await db.query('update users set falhas_login = 0, bloqueado_ate = null where id = $1', [user.id]);
+  // A palavra-passe está certa, mas o email nunca foi confirmado: não se abre sessão (o servidor reenvia o código).
+  if (!user.email_verificado_em) {
+    await auditar(db, 'auth.login_sem_verificacao', user.id, ip);
+    throw new ErroAuth('email_nao_verificado', 403);
+  }
   await auditar(db, 'auth.login', user.id, ip);
   return { userId: user.id, sessao: await abrirSessao(db, user.id, segredos) };
 }

@@ -66,6 +66,22 @@ class RepositorioMemoria implements Repositorio {
   Future<List<Toma>> tomasDeHoje(String perfilId, DateTime agora) async =>
       List.unmodifiable(_tomas[perfilId] ?? const []);
 
+  /// Tomas de dias passados, só para o histórico (quem não as pede nunca as vê).
+  final Map<String, List<Toma>> historicoExtra = {};
+
+  @override
+  Future<List<Toma>> historico(
+    String perfilId,
+    DateTime de,
+    DateTime ate,
+  ) async {
+    final todas = [...?historicoExtra[perfilId], ...?_tomas[perfilId]];
+    return [
+      for (final t in todas)
+        if (!t.agendada.isBefore(de) && t.agendada.isBefore(ate)) t,
+    ]..sort((a, b) => a.agendada.compareTo(b.agendada));
+  }
+
   Toma _atualizar(String id, Toma Function(Toma) f) {
     for (final lista in _tomas.values) {
       final i = lista.indexWhere((t) => t.id == id);

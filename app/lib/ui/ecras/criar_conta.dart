@@ -530,10 +530,14 @@ class SucessoContaEcra extends StatelessWidget {
     required this.nome,
     required this.aoAdicionarPessoa,
     required this.aoDepois,
+    this.aoSoParaMim,
   });
   final String nome;
   final VoidCallback aoAdicionarPessoa;
   final VoidCallback aoDepois;
+
+  /// "Usar só para mim": o cuidador é também quem toma os medicamentos.
+  final VoidCallback? aoSoParaMim;
 
   @override
   Widget build(BuildContext context) {
@@ -541,7 +545,9 @@ class SucessoContaEcra extends StatelessWidget {
     return EcraResultado(
       topo: TopoResultado(
         titulo: 'Conta criada!',
-        texto: 'Olá, $nome. Já pode adicionar a primeira pessoa.',
+        texto: aoSoParaMim == null
+            ? 'Olá, $nome. Já pode adicionar a primeira pessoa.'
+            : 'Olá, $nome. Pode usar o Amparo só para si ou acompanhar outra pessoa.',
       ),
       cartao: CartaoResultado(
         child: Row(
@@ -589,11 +595,23 @@ class SucessoContaEcra extends StatelessWidget {
         ),
       ),
       acoes: [
+        if (aoSoParaMim != null)
+          Botao(
+            texto: 'Usar só para mim',
+            altura: 60,
+            raio: 22,
+            tamanhoTexto: 18,
+            aoTocar: aoSoParaMim,
+          ),
         Botao(
-          texto: 'Adicionar a primeira pessoa',
+          texto: aoSoParaMim == null
+              ? 'Adicionar a primeira pessoa'
+              : 'Acompanhar outra pessoa',
           altura: 60,
           raio: 22,
           tamanhoTexto: 18,
+          fundo: aoSoParaMim == null ? null : t.primariaSuave,
+          cor: aoSoParaMim == null ? null : t.sobrePrimariaSuave,
           aoTocar: aoAdicionarPessoa,
         ),
         AcaoTexto(texto: 'Fazer isto mais tarde', aoTocar: aoDepois),
