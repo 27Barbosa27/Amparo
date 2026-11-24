@@ -12,6 +12,36 @@ import '../componentes/formulario.dart';
 import '../componentes/icones.dart';
 import 'cuidador_hoje.dart' show horaCurta, itemQueSobe;
 
+/// Os períodos do histórico: 1 dia, 7 dias, 30 dias e 6 meses (o mês de hoje e os 5 anteriores).
+enum _Periodo {
+  dia('1 dia', 'hoje'),
+  semana('7 dias', 'nos últimos 7 dias'),
+  mes('30 dias', 'nos últimos 30 dias'),
+  seisMeses('6 meses', 'nos últimos 6 meses');
+
+  const _Periodo(this.rotulo, this.adesaoTexto);
+  final String rotulo;
+
+  /// "de adesão ..." (o fim da frase).
+  final String adesaoTexto;
+
+  /// O primeiro dia do período.
+  DateTime inicio(DateTime hoje) => switch (this) {
+    _Periodo.dia => hoje,
+    _Periodo.semana => DateTime(hoje.year, hoje.month, hoje.day - 6),
+    _Periodo.mes => DateTime(hoje.year, hoje.month, hoje.day - 29),
+    _Periodo.seisMeses => DateTime(hoje.year, hoje.month - 5),
+  };
+}
+
+/// Uma coluna do gráfico: um dia (7 e 30 dias) ou um mês (6 meses).
+class _Coluna {
+  const _Coluna(this.rotulo, this.resumo, {this.destaque = false});
+  final String rotulo;
+  final ResumoHistorico resumo;
+  final bool destaque;
+}
+
 /// "Histórico de tomas": como correram os últimos 7 ou 30 dias. Em cima a adesão e os números do período; por
 /// baixo, dia a dia (do mais recente para o mais antigo), cada toma com o seu resultado.
 class HistoricoTomasEcra extends StatefulWidget {
@@ -35,7 +65,7 @@ class HistoricoTomasEcra extends StatefulWidget {
 }
 
 class _HistoricoTomasEcraState extends State<HistoricoTomasEcra> {
-  int _dias = 7;
+  _Periodo _periodo = _Periodo.semana;
   List<Toma> _tomas = const [];
   bool _aCarregar = true;
   String? _erro;
@@ -56,7 +86,7 @@ class _HistoricoTomasEcraState extends State<HistoricoTomasEcra> {
     try {
       final tomas = await widget.repositorio.historico(
         widget.perfil.id,
-        hoje.subtract(Duration(days: _dias - 1)),
+        _periodo.inicio(hoje),
         hoje.add(const Duration(days: 1)),
       );
       if (!mounted) return;
@@ -79,10 +109,63 @@ class _HistoricoTomasEcraState extends State<HistoricoTomasEcra> {
     }
   }
 
-  void _mudarPeriodo(int dias) {
-    if (dias == _dias) return;
-    setState(() => _dias = dias);
+  void _mudarPeriodo(_Periodo periodo) {
+    if (periodo == _periodo) return;
+    setState(() => _periodo = periodo);
     _carregar();
+  }
+
+  /// As colunas do gráfico: um dia cada (7 e 30 dias) ou um mês cada (6 meses).
+  List<_Coluna> _colunas(
+    Map<DateTime, List<Toma>> porDia,
+    DateTime hoje,
+    DateTime agora,
+  ) {
+    if (_periodo == _Periodo.seisMeses) {
+      return [
+        for (var m = 5; m >= 0; m--)
+          () {
+            final mes = DateTime(hoje.year, hoje.month - m);
+            final tomas = [
+              for (final e in porDia.entries)
+                if (e.key.year == mes.year && e.key.month == mes.month)
+                  ...e.value,
+            ];
+            final nome = DateFormat(
+              'MMM',
+              'pt_PT',
+            ).format(mes).replaceAll('.', '');
+            return _Coluna(
+              nome[0].toUpperCase() + nome.substring(1),
+              ResumoHistorico.de(tomas, agora),
+              destaque: m == 0,
+            );
+          }(),
+      ];
+    }
+    final inicio = _periodo.inicio(hoje);
+    final n = hoje.difference(inicio).inDays + 1;
+    final sete = n <= 7;
+    return [
+      for (var i = 0; i < n; i++)
+        () {
+          final d = DateTime(inicio.year, inicio.month, inicio.day + i);
+          final resto = hoje.difference(d).inDays;
+          return _Coluna(
+            sete
+                ? DateFormat(
+                    'EEEE',
+                    'pt_PT',
+                  ).format(d).substring(0, 1).toUpperCase()
+                // 30 dias: o número de 5 em 5 e o de hoje (sem colar ao do dia 5 anterior)
+                : (resto == 0 || (d.day % 5 == 0 && resto > 1)
+                      ? '${d.day}'
+                      : ''),
+            ResumoHistorico.de(porDia[d] ?? const [], agora),
+            destaque: resto == 0,
+          );
+        }(),
+    ];
   }
 
   String _tituloDoDia(DateTime dia, DateTime hoje) {
@@ -121,11 +204,12 @@ class _HistoricoTomasEcraState extends State<HistoricoTomasEcra> {
             : 'Como correram as tomas de ${widget.perfil.nome}.',
         espaco: 14,
       ),
-      GrelhaOpcoes<int>(
+      GrelhaOpcoes<_Periodo>(
         titulo: 'Período',
-        opcoes: const [7, 30],
-        texto: (d) => 'Últimos $d dias',
-        valor: _dias,
+        opcoes: _Periodo.values,
+        texto: (p) => p.rotulo,
+        valor: _periodo,
+        colunas: 4,
         aoEscolher: _mudarPeriodo,
       ),
       if (_aCarregar)
@@ -156,7 +240,13 @@ class _HistoricoTomasEcraState extends State<HistoricoTomasEcra> {
           ),
         )
       else ...[
-        _CartaoAdesao(resumo: resumo, dias: _dias),
+        _CartaoAdesao(resumo: resumo, periodo: _periodo),
+        // Num só dia, uma barra não diz nada: a lista de baixo já mostra o dia todo.
+        if (_periodo != _Periodo.dia)
+          _GraficoDias(
+            titulo: _periodo == _Periodo.seisMeses ? 'Por mês' : 'Por dia',
+            colunas: _colunas(porDia, hoje, agora),
+          ),
         if (dias.isEmpty)
           Cartao(
             raio: 5,
@@ -186,11 +276,216 @@ class _HistoricoTomasEcraState extends State<HistoricoTomasEcra> {
   }
 }
 
+/// As tomas do período, em barras: cada barra é um dia (ou um mês) e empilha o resultado das suas tomas
+/// (tomadas em baixo, depois saltadas, esquecidas e o que ainda vem a caminho). A altura mede quantas tomas tinha.
+class _GraficoDias extends StatelessWidget {
+  const _GraficoDias({required this.titulo, required this.colunas});
+
+  final String titulo;
+
+  /// Do mais antigo para o mais recente (também as que não têm tomas).
+  final List<_Coluna> colunas;
+
+  static const _altura = 96.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    final contagens = [for (final c in colunas) c.resumo];
+    final maximo = contagens.fold<int>(0, (m, c) => c.total > m ? c.total : m);
+    // Poucas colunas: barras largas; muitas (30 dias): finas, coladas.
+    final largas = colunas.length <= 7;
+
+    Widget segmento(int n, Color cor, double unidade, {Color? contorno}) {
+      if (n == 0) return const SizedBox.shrink();
+      return Container(
+        height: n * unidade,
+        margin: const EdgeInsets.only(top: 1.5),
+        decoration: BoxDecoration(
+          color: cor,
+          borderRadius: BorderRadius.circular(2),
+          border: contorno == null ? null : Border.all(color: contorno),
+        ),
+      );
+    }
+
+    final legenda = <(Color, String)>[
+      (t.ok, 'tomadas'),
+      if (contagens.any((c) => c.saltadas > 0)) (t.texto2, 'saltadas'),
+      if (contagens.any((c) => c.esquecidas > 0)) (t.mau, 'esquecidas'),
+      if (contagens.any((c) => c.porConfirmar > 0)) (t.aviso, 'por confirmar'),
+    ];
+
+    return Cartao(
+      raio: 5,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              titulo,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: t.texto,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (maximo == 0)
+            SizedBox(
+              height: _altura / 2,
+              child: Center(
+                child: Text(
+                  'Ainda não há tomas neste período.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: t.texto2,
+                  ),
+                ),
+              ),
+            )
+          else
+            ExcludeSemantics(
+              // `mGrow`: as barras crescem de baixo para cima, depois de 0,3 s.
+              child: AnimarComAtraso(
+                atraso: const Duration(milliseconds: 300),
+                duracao: const Duration(milliseconds: 600),
+                builder: (context, progresso) => SizedBox(
+                  height: _altura + 22,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final (i, coluna) in colunas.indexed)
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: largas ? 6 : 1,
+                            ),
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  height: _altura,
+                                  child: Align(
+                                    alignment: Alignment.bottomCenter,
+                                    child: contagens[i].total == 0
+                                        // um dia sem tomas: só um traço no chão
+                                        ? Container(
+                                            height: 3,
+                                            decoration: BoxDecoration(
+                                              color: t.linha,
+                                              borderRadius:
+                                                  BorderRadius.circular(2),
+                                            ),
+                                          )
+                                        : Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: () {
+                                              final u =
+                                                  ((_altura - 8) / maximo) *
+                                                  progresso;
+                                              final c = contagens[i];
+                                              // de cima para baixo: o que falta, as esquecidas, as saltadas, as tomadas
+                                              return [
+                                                segmento(
+                                                  c.porTomar,
+                                                  t.superficie2,
+                                                  u,
+                                                  contorno: t.linha,
+                                                ),
+                                                segmento(
+                                                  c.porConfirmar,
+                                                  t.aviso,
+                                                  u,
+                                                ),
+                                                segmento(
+                                                  c.esquecidas,
+                                                  t.mau,
+                                                  u,
+                                                ),
+                                                segmento(
+                                                  c.saltadas,
+                                                  t.texto2.withValues(
+                                                    alpha: .55,
+                                                  ),
+                                                  u,
+                                                ),
+                                                segmento(c.tomadas, t.ok, u),
+                                              ];
+                                            }(),
+                                          ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  coluna.rotulo,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.visible,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1.2,
+                                    fontWeight: coluna.destaque
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    color: coluna.destaque ? t.texto : t.texto2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (maximo > 0) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 14,
+              runSpacing: 4,
+              children: [
+                for (final (cor, nome) in legenda)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: cor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        nome,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: t.texto2,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// A adesão do período, grande, e os números por baixo.
 class _CartaoAdesao extends StatelessWidget {
-  const _CartaoAdesao({required this.resumo, required this.dias});
+  const _CartaoAdesao({required this.resumo, required this.periodo});
   final ResumoHistorico resumo;
-  final int dias;
+  final _Periodo periodo;
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +522,7 @@ class _CartaoAdesao extends StatelessWidget {
         container: true,
         label: adesao == null
             ? 'Ainda sem histórico'
-            : 'Adesão de $adesao por cento nos últimos $dias dias',
+            : 'Adesão de $adesao por cento ${periodo.adesaoTexto}',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -251,7 +546,7 @@ class _CartaoAdesao extends StatelessWidget {
                     child: Text(
                       adesao == null
                           ? 'Ainda sem histórico'
-                          : 'de adesão nos últimos $dias dias',
+                          : 'de adesão ${periodo.adesaoTexto}',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -438,7 +733,7 @@ class _LinhaToma extends StatelessWidget {
         child: Row(
           children: [
             SizedBox(
-              width: 48,
+              width: 58,
               child: Text(
                 horaCurta(toma.agendada),
                 style: TextStyle(

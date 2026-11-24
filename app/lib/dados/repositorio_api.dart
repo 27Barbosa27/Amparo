@@ -81,8 +81,22 @@ class RepositorioApi implements Repositorio {
   }
 
   @override
-  Future<List<Toma>> historico(String perfilId, DateTime de, DateTime ate) =>
-      _entre(perfilId, de, ate);
+  Future<List<Toma>> historico(
+    String perfilId,
+    DateTime de,
+    DateTime ate,
+  ) async {
+    // O servidor dá no máximo 92 dias por pedido: períodos longos (6 meses) vão em janelas seguidas de 90.
+    final todas = <Toma>[];
+    var inicio = de;
+    while (inicio.isBefore(ate)) {
+      var fim = DateTime(inicio.year, inicio.month, inicio.day + 90);
+      if (fim.isAfter(ate)) fim = ate;
+      todas.addAll(await _entre(perfilId, inicio, fim));
+      inicio = fim;
+    }
+    return todas;
+  }
 
   @override
   Future<List<Toma>> tomasDeHoje(String perfilId, DateTime agora) {

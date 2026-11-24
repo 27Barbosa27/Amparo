@@ -428,6 +428,25 @@ void main() {
       expect(m.servidor.de('POST /tomas/t1/desfazer'), hasLength(1));
     });
 
+    test('o histórico de 6 meses vai em janelas seguidas de 90 dias (o servidor só dá 92 por pedido)', () async {
+      m.servidor.responder('GET /tomas', {'tomas': <Object>[]});
+      final ate = DateTime(2026, 11, 22);
+      await repo.historico('p1', DateTime(2026, 6), ate);
+      final pedidos = m.servidor.de('GET /tomas').toList();
+      expect(pedidos.length, 2); // 175 dias: 90 + 85
+      DateTime lerData(Pedido p, String k) =>
+          DateTime.parse(p.url.queryParameters[k]!);
+      // sem buracos nem sobreposição, e dentro do limite do servidor
+      expect(lerData(pedidos[0], 'ate'), lerData(pedidos[1], 'de'));
+      for (final p in pedidos) {
+        expect(
+          lerData(p, 'ate').difference(lerData(p, 'de')).inDays,
+          lessThanOrEqualTo(92),
+        );
+      }
+      expect(lerData(pedidos[1], 'ate'), ate.toUtc());
+    });
+
     test('a adesão dos 7 dias marca como esquecido o dia com tomas por fazer, e hoje como em curso', () async {
       final agora = DateTime(2026, 11, 21, 15);
       String dia(int atras) =>

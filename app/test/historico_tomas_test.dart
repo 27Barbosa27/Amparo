@@ -120,10 +120,68 @@ void main() {
     expect(find.text('Antigo'), findsNothing);
 
     // 30 dias: já aparece a de dia 10
-    await tester.tap(find.text('Últimos 30 dias'));
+    await tester.tap(find.text('30 dias'));
     await tester.pumpAndSettle();
     expect(find.text('Antigo'), findsOneWidget);
     expect(find.text('de adesão nos últimos 30 dias'), findsOneWidget);
     expect(find.text('Terça-feira, 10 de novembro'), findsOneWidget);
+  });
+
+  testWidgets('1 dia mostra só hoje, sem gráfico; 6 meses agrupa por mês', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final repo = RepositorioMemoria(agora: agora);
+    repo.historicoExtra['maria'] = [
+      toma('a', DateTime(2026, 11, 20, 8), EstadoToma.tomada, med: 'Ramipril'),
+      toma('b', DateTime(2026, 8, 5, 8), EstadoToma.tomada, med: 'Antigo'),
+    ];
+    await tester.pumpWidget(
+      AmparoApp(
+        repositorio: repo,
+        autenticacao: AutenticacaoMemoria(),
+        relogio: () => agora,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'ana@exemplo.pt');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'uma-senha-segura-123',
+    );
+    await tester.tap(find.widgetWithText(InkWell, 'Entrar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-configurações')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Histórico de tomas'));
+    await tester.pumpAndSettle();
+
+    // as quatro escolhas
+    for (final p in ['1 dia', '7 dias', '30 dias', '6 meses']) {
+      expect(find.text(p), findsOneWidget);
+    }
+
+    await tester.tap(find.text('1 dia'));
+    await tester.pumpAndSettle();
+    expect(find.text('de adesão hoje'), findsOneWidget);
+    expect(find.text('Por dia'), findsNothing);
+    expect(find.text('Ontem'), findsNothing);
+    expect(find.text('Hoje'), findsOneWidget);
+
+    await tester.tap(find.text('6 meses'));
+    await tester.pumpAndSettle();
+    expect(find.text('de adesão nos últimos 6 meses'), findsOneWidget);
+    expect(find.text('Por mês'), findsOneWidget);
+    expect(
+      find.text('Antigo'),
+      findsOneWidget,
+    ); // de agosto: dentro dos 6 meses
+    expect(find.text('Nov'), findsOneWidget);
+    expect(find.text('Jun'), findsOneWidget); // o mês mais antigo da fila
   });
 }
