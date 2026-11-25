@@ -415,11 +415,15 @@ class CartaoOpcao extends StatelessWidget {
     required this.descricao,
     required this.ativo,
     required this.aoTocar,
+    this.fim,
   });
   final String titulo;
   final String descricao;
   final bool ativo;
   final VoidCallback aoTocar;
+
+  /// Um botão extra antes do círculo de seleção (por exemplo, "renomear").
+  final Widget? fim;
 
   @override
   Widget build(BuildContext context) {
@@ -466,7 +470,8 @@ class CartaoOpcao extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                if (fim != null) ...[fim!, const SizedBox(width: 4)],
+                const SizedBox(width: 8),
                 ativo
                     ? Selo(
                         cor: t.primaria,

@@ -63,13 +63,28 @@ class SomImportado extends EscolhaSomAlarme {
 /// Limite de tamanho do som importado: o alarme repete-o em ciclo, não precisa de ser longo.
 const _tamanhoMaximoBytes = 2 * 1024 * 1024; // 2 MB
 
+/// Tira a extensão do nome do ficheiro (".mp3", ".wav"...): ninguém precisa de a ver.
+String _semExtensao(String nome) {
+  final i = nome.lastIndexOf('.');
+  return i <= 0 ? nome : nome.substring(0, i);
+}
+
 /// "Som do alarme": escolhe o som que toca quando chega a hora de uma toma, com pré-visualização.
-/// Pode-se também importar um som do telemóvel: fica só neste telemóvel, nunca é enviado para a API.
+/// Pode-se também importar vários sons do telemóvel (e renomeá-los): ficam só neste telemóvel,
+/// nunca são enviados para a API.
 class SomAlarmeEcra extends StatefulWidget {
-  const SomAlarmeEcra({super.key, required this.atual, required this.aoGuardar});
+  const SomAlarmeEcra({
+    super.key,
+    required this.atual,
+    required this.importados,
+    required this.aoGuardar,
+  });
 
   final EscolhaSomAlarme atual;
-  final ValueChanged<EscolhaSomAlarme> aoGuardar;
+  final List<SomImportado> importados;
+
+  /// Devolve a escolha e a lista atualizada de importados (pode ter mais itens, ou nomes mudados).
+  final void Function(EscolhaSomAlarme escolha, List<SomImportado> importados) aoGuardar;
 
   @override
   State<SomAlarmeEcra> createState() => _SomAlarmeEcraState();
@@ -77,16 +92,10 @@ class SomAlarmeEcra extends StatefulWidget {
 
 class _SomAlarmeEcraState extends State<SomAlarmeEcra> {
   late EscolhaSomAlarme _escolha = widget.atual;
+  late final _importados = List<SomImportado>.of(widget.importados);
   final _leitor = AudioPlayer();
-  SomImportado? _importado;
   bool _aImportar = false;
   String? _erro;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.atual case final SomImportado s) _importado = s;
-  }
 
   @override
   void dispose() {
@@ -105,6 +114,11 @@ class _SomAlarmeEcraState extends State<SomAlarmeEcra> {
     await _leitor.play(AssetSource(som.ficheiro));
   }
 
+  Future<void> _escolherImportado(SomImportado som) async {
+    setState(() => _escolha = som);
+    await _tocarBytes(som.bytes);
+  }
+
   Future<void> _importar() async {
     setState(() {
       _erro = null;
@@ -118,9 +132,9 @@ class _SomAlarmeEcraState extends State<SomAlarmeEcra> {
         setState(() => _erro = 'Esse som é demasiado grande. Escolha um com menos de 2 MB.');
         return;
       }
-      final novo = SomImportado(nome: ficheiro.name, bytes: bytes);
+      final novo = SomImportado(nome: _semExtensao(ficheiro.name), bytes: bytes);
       setState(() {
-        _importado = novo;
+        _importados.add(novo);
         _escolha = novo;
       });
       await _tocarBytes(bytes);
@@ -129,10 +143,39 @@ class _SomAlarmeEcraState extends State<SomAlarmeEcra> {
     }
   }
 
+  Future<void> _renomear(int indice) async {
+    final atual = _importados[indice];
+    final controlador = TextEditingController(text: atual.nome);
+    final novoNome = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Nome do som'),
+        content: TextField(controller: controlador, autofocus: true, maxLength: 40),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(controlador.text.trim()),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    controlador.dispose();
+    if (novoNome == null || novoNome.isEmpty || !mounted) return;
+    final renomeado = SomImportado(nome: novoNome, bytes: atual.bytes);
+    setState(() {
+      final eraEscolhido = _escolha == atual;
+      _importados[indice] = renomeado;
+      if (eraEscolhido) _escolha = renomeado;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = context.t;
-    final importado = _importado;
     return CorpoComRodape(
       conteudo: [
         const CabecalhoFormulario(
@@ -149,23 +192,34 @@ class _SomAlarmeEcraState extends State<SomAlarmeEcra> {
             aoTocar: () => _escolherEmbutido(som),
           ),
         ],
-        if (importado != null) ...[
+        for (var i = 0; i < _importados.length; i++) ...[
           const SizedBox(height: 10),
           CartaoOpcao(
-            titulo: importado.nome,
+            titulo: _importados[i].nome,
             descricao: 'Importado do seu telemóvel.',
-            ativo: _escolha == importado,
-            aoTocar: () async {
-              setState(() => _escolha = importado);
-              await _tocarBytes(importado.bytes);
-            },
+            ativo: _escolha == _importados[i],
+            aoTocar: () => _escolherImportado(_importados[i]),
+            fim: Semantics(
+              button: true,
+              label: 'Renomear ${_importados[i].nome}',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => _renomear(i),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.edit,
+                    size: 20,
+                    color: _escolha == _importados[i] ? t.sobrePrimariaSuave : t.texto2,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
         const SizedBox(height: 18),
         Botao(
-          texto: _aImportar
-              ? 'A abrir…'
-              : (importado == null ? 'Importar som do telemóvel' : 'Importar outro som'),
+          texto: _aImportar ? 'A abrir…' : 'Importar som do telemóvel',
           icone: Icons.upload_file,
           fundo: t.superficie2,
           cor: t.texto,
@@ -173,13 +227,6 @@ class _SomAlarmeEcraState extends State<SomAlarmeEcra> {
           raio: 18,
           tamanhoTexto: 15,
           aoTocar: _aImportar ? null : _importar,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            'Fica só neste telemóvel: nunca é enviado para fora.',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: t.texto2),
-          ),
         ),
         if (_erro != null) ...[
           const SizedBox(height: 10),
@@ -207,7 +254,7 @@ class _SomAlarmeEcraState extends State<SomAlarmeEcra> {
           raio: 22,
           tamanhoTexto: 18,
           aoTocar: () {
-            widget.aoGuardar(_escolha);
+            widget.aoGuardar(_escolha, _importados);
             Navigator.of(context).maybePop();
           },
         ),

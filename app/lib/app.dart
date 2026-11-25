@@ -86,6 +86,7 @@ class _AmparoAppState extends State<AmparoApp> {
   /// Sem campo no perfil (nem design próprio): fica só nesta sessão, como o modo escuro.
   /// Se for importado, os bytes também ficam só em memória (nunca vão para a API).
   EscolhaSomAlarme _somAlarme = const SomEmbutido(SomAlarme.sino);
+  List<SomImportado> _sonsImportados = [];
 
   /// Só para abrir ecrãs empurrados em desenvolvimento (`TELA=pessoa-nova`, `receita-nova`).
   final _navegador = GlobalKey<NavigatorState>();
@@ -885,7 +886,11 @@ class _AmparoAppState extends State<AmparoApp> {
               rotaPagina<void>(
                 SomAlarmeEcra(
                   atual: _somAlarme,
-                  aoGuardar: (s) => setState(() => _somAlarme = s),
+                  importados: _sonsImportados,
+                  aoGuardar: (s, importados) => setState(() {
+                    _somAlarme = s;
+                    _sonsImportados = importados;
+                  }),
                 ),
               ),
             ),
