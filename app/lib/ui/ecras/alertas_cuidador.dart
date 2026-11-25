@@ -157,10 +157,24 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
                 ),
                 _LinhaAlerta(
                   titulo: 'Receita a acabar',
-                  descricao: 'Aviso ${prefs.diasAntes} dias antes de acabar',
+                  descricao: 'Aviso ${prefs.diasAntes} ${prefs.diasAntes == 1 ? 'dia' : 'dias'} antes de acabar',
                   ligado: prefs.receitaAcabar,
                   ultima: true,
                   aoMudar: (v) => setState(() => _prefs = prefs.copiarCom(receitaAcabar: v)),
+                  extra: prefs.receitaAcabar
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: GrelhaOpcoes<int>(
+                            titulo: '',
+                            opcoes: const [2, 4, 7, 14],
+                            colunas: 4,
+                            texto: (d) => '$d d',
+                            valor: prefs.diasAntes,
+                            aoEscolher: (d) =>
+                                setState(() => _prefs = prefs.copiarCom(diasAntes: d)),
+                          ),
+                        )
+                      : null,
                 ),
               ],
             ),
