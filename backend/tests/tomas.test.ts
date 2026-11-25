@@ -404,7 +404,7 @@ describe('Preferências de alertas', () => {
     const a = await conta();
     const p = await perfil(a);
     const base = { tomaNaoConfirmada: true, esperaMin: 15, tomaFeita: false, receitaAcabar: true, diasAntes: 4 };
-    for (const mau of [{ esperaMin: 20 }, { diasAntes: 0 }, { diasAntes: 31 }, { tomaFeita: 'sim' }]) {
+    for (const mau of [{ esperaMin: 0 }, { esperaMin: 181 }, { diasAntes: 0 }, { diasAntes: 31 }, { tomaFeita: 'sim' }]) {
       expect((await request(app).put('/alert-prefs').set(auth(a, p)).send({ ...base, ...mau })).status).toBe(400);
     }
   });

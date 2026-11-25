@@ -6,7 +6,7 @@ import type { Db } from '../db.js';
 
 const prefsSchema = z.object({
   tomaNaoConfirmada: z.boolean(),
-  esperaMin: z.union([z.literal(10), z.literal(15), z.literal(30)]),
+  esperaMin: z.number().int().min(1).max(180),
   tomaFeita: z.boolean(),
   receitaAcabar: z.boolean(),
   diasAntes: z.number().int().min(1).max(30),

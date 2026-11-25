@@ -34,10 +34,21 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
   bool _aGuardar = false;
   String? _erro;
 
+  /// O texto escreve-se livremente; só se valida ao guardar (ver [_guardar]).
+  final _esperaMinCtrl = TextEditingController();
+  final _diasAntesCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _carregar();
+  }
+
+  @override
+  void dispose() {
+    _esperaMinCtrl.dispose();
+    _diasAntesCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _carregar() async {
@@ -48,7 +59,11 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
     try {
       final prefs = await widget.repositorio.alertasPrefs(widget.perfil.id);
       if (!mounted) return;
-      setState(() => _prefs = prefs);
+      setState(() {
+        _prefs = prefs;
+        _esperaMinCtrl.text = '${prefs.esperaMin}';
+        _diasAntesCtrl.text = '${prefs.diasAntes}';
+      });
     } on ErroApi catch (e) {
       setState(() => _erro = e.codigo);
     } catch (_) {
@@ -61,12 +76,25 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
   Future<void> _guardar() async {
     final prefs = _prefs;
     if (prefs == null) return;
+    final esperaMin = int.tryParse(_esperaMinCtrl.text.trim());
+    if (esperaMin == null || esperaMin < 1 || esperaMin > 180) {
+      setState(() => _erro = 'Escreva um número de minutos entre 1 e 180.');
+      return;
+    }
+    final diasAntes = int.tryParse(_diasAntesCtrl.text.trim());
+    if (diasAntes == null || diasAntes < 1 || diasAntes > 30) {
+      setState(() => _erro = 'Escreva um número de dias entre 1 e 30.');
+      return;
+    }
     setState(() {
       _aGuardar = true;
       _erro = null;
     });
     try {
-      await widget.repositorio.atualizarAlertasPrefs(widget.perfil.id, prefs);
+      await widget.repositorio.atualizarAlertasPrefs(
+        widget.perfil.id,
+        prefs.copiarCom(esperaMin: esperaMin, diasAntes: diasAntes),
+      );
       if (mounted) Navigator.of(context).maybePop();
     } on ErroApi catch (e) {
       setState(() => _erro = e.codigo == 'sem_rede'
@@ -136,13 +164,10 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
                   extra: prefs.tomaNaoConfirmada
                       ? Padding(
                           padding: const EdgeInsets.only(top: 12),
-                          child: GrelhaOpcoes<int>(
-                            titulo: '',
-                            opcoes: const [10, 15, 30],
-                            texto: (m) => '$m min',
-                            valor: prefs.esperaMin,
-                            aoEscolher: (m) =>
-                                setState(() => _prefs = prefs.copiarCom(esperaMin: m)),
+                          child: _CampoNumero(
+                            controlador: _esperaMinCtrl,
+                            prefixo: 'Avisar ao fim de',
+                            sufixo: 'minutos',
                           ),
                         )
                       : null,
@@ -157,21 +182,17 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
                 ),
                 _LinhaAlerta(
                   titulo: 'Receita a acabar',
-                  descricao: 'Aviso ${prefs.diasAntes} ${prefs.diasAntes == 1 ? 'dia' : 'dias'} antes de acabar',
+                  descricao: 'Aviso antes de a receita acabar',
                   ligado: prefs.receitaAcabar,
                   ultima: true,
                   aoMudar: (v) => setState(() => _prefs = prefs.copiarCom(receitaAcabar: v)),
                   extra: prefs.receitaAcabar
                       ? Padding(
                           padding: const EdgeInsets.only(top: 12),
-                          child: GrelhaOpcoes<int>(
-                            titulo: '',
-                            opcoes: const [2, 4, 7, 14],
-                            colunas: 4,
-                            texto: (d) => '$d d',
-                            valor: prefs.diasAntes,
-                            aoEscolher: (d) =>
-                                setState(() => _prefs = prefs.copiarCom(diasAntes: d)),
+                          child: _CampoNumero(
+                            controlador: _diasAntesCtrl,
+                            prefixo: 'Avisar',
+                            sufixo: 'dias antes',
                           ),
                         )
                       : null,
@@ -313,6 +334,63 @@ class _LinhaAlerta extends StatelessWidget {
           ?extra,
         ],
       ),
+    );
+  }
+}
+
+/// Um número escrito à mão (minutos ou dias), em vez de escolhas fixas: "Avisar ao fim de [15] minutos".
+class _CampoNumero extends StatelessWidget {
+  const _CampoNumero({
+    required this.controlador,
+    required this.prefixo,
+    required this.sufixo,
+  });
+
+  final TextEditingController controlador;
+  final String prefixo;
+  final String sufixo;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    OutlineInputBorder borda(Color c) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: c, width: 2),
+    );
+    return Row(
+      children: [
+        Text(
+          prefixo,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: t.texto2),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 64,
+          height: 44,
+          child: TextField(
+            controller: controlador,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            maxLength: 3,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: t.texto),
+            decoration: InputDecoration(
+              counterText: '',
+              isDense: true,
+              filled: true,
+              fillColor: t.superficie2,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              border: borda(t.linha),
+              enabledBorder: borda(t.linha),
+              focusedBorder: borda(t.primaria),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          sufixo,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: t.texto2),
+        ),
+      ],
     );
   }
 }
