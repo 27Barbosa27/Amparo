@@ -86,24 +86,6 @@ Mockups do desenho (feito no Claude Design, ver [`docs/design.md`](docs/design.m
 - [ ] Plano pago (freemium) ([`plano-pago`](docs/plano-pago.md))
 - [ ] Deploy em produção e publicação nas lojas ([`deploy`](docs/deploy.md))
 
-## Como correr
-
-Requisitos: Flutter, Node.js e Podman.
-
-```powershell
-# Base de dados e API
-cd backend
-npm run db:up
-npm run migrate
-npm run dev          # http://127.0.0.1:3000
-
-# App no Chrome com tamanho de telemóvel
-cd ../app
-.\scripts\chrome.ps1 # http://127.0.0.1:8099
-```
-
-O `backend/.env` não vai para o git; precisa de `CORS_ORIGINS=http://127.0.0.1:8099` e do ID de cliente Google. Testes da API: `npm test` em `backend/`.
-
 ## Documentação
 
 O plano técnico está em [`docs/plano.md`](docs/plano.md), o desenho dos ecrãs em [`docs/design.md`](docs/design.md) e o índice completo em [`docs/index.md`](docs/index.md).
