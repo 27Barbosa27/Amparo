@@ -268,6 +268,40 @@ class RepositorioApi implements Repositorio {
     );
   }
 
+  AlertasPrefs _alertasPrefs(Map<String, dynamic> p) => AlertasPrefs(
+    tomaNaoConfirmada: p['tomaNaoConfirmada'] as bool,
+    esperaMin: p['esperaMin'] as int,
+    tomaFeita: p['tomaFeita'] as bool,
+    receitaAcabar: p['receitaAcabar'] as bool,
+    diasAntes: p['diasAntes'] as int,
+  );
+
+  @override
+  Future<AlertasPrefs> alertasPrefs(String perfilId) async {
+    final j = await _api.pedir('GET', '/alert-prefs', perfilId: perfilId);
+    return _alertasPrefs(j!['prefs'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<AlertasPrefs> atualizarAlertasPrefs(
+    String perfilId,
+    AlertasPrefs prefs,
+  ) async {
+    final j = await _api.pedir(
+      'PUT',
+      '/alert-prefs',
+      perfilId: perfilId,
+      corpo: {
+        'tomaNaoConfirmada': prefs.tomaNaoConfirmada,
+        'esperaMin': prefs.esperaMin,
+        'tomaFeita': prefs.tomaFeita,
+        'receitaAcabar': prefs.receitaAcabar,
+        'diasAntes': prefs.diasAntes,
+      },
+    );
+    return _alertasPrefs(j!['prefs'] as Map<String, dynamic>);
+  }
+
   @override
   Future<Perfil> criarPessoa(NovaPessoa pessoa) async {
     final j = await _api.pedir(

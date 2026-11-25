@@ -254,6 +254,43 @@ enum TamanhoTexto {
   };
 }
 
+/// As preferências de alerta do cuidador para um perfil: quando é avisado sobre as tomas da
+/// pessoa. Cada cuidador tem as suas (duas pessoas a cuidar da mesma podem escolher diferente).
+class AlertasPrefs {
+  const AlertasPrefs({
+    this.tomaNaoConfirmada = true,
+    this.esperaMin = 15,
+    this.tomaFeita = false,
+    this.receitaAcabar = true,
+    this.diasAntes = 4,
+  });
+
+  /// Aviso se a toma não for confirmada ao fim de [esperaMin] minutos (10, 15 ou 30).
+  final bool tomaNaoConfirmada;
+  final int esperaMin;
+
+  /// Aviso sempre que a toma for confirmada (não só quando falha).
+  final bool tomaFeita;
+
+  /// Aviso quando uma receita está a acabar, [diasAntes] dias antes do fim.
+  final bool receitaAcabar;
+  final int diasAntes;
+
+  AlertasPrefs copiarCom({
+    bool? tomaNaoConfirmada,
+    int? esperaMin,
+    bool? tomaFeita,
+    bool? receitaAcabar,
+    int? diasAntes,
+  }) => AlertasPrefs(
+    tomaNaoConfirmada: tomaNaoConfirmada ?? this.tomaNaoConfirmada,
+    esperaMin: esperaMin ?? this.esperaMin,
+    tomaFeita: tomaFeita ?? this.tomaFeita,
+    receitaAcabar: receitaAcabar ?? this.receitaAcabar,
+    diasAntes: diasAntes ?? this.diasAntes,
+  );
+}
+
 class NovaPessoa {
   const NovaPessoa({
     required this.nome,

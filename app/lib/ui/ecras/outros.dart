@@ -387,7 +387,11 @@ class MaisEcra extends StatelessWidget {
     this.aoTamanhoTexto,
     this.somAlarme = const SomEmbutido(SomAlarme.sino),
     this.aoSomAlarme,
+    this.aoAlertasCuidador,
   });
+
+  /// "Alertas ao cuidador": abre o ecrã de escolha de quando é avisado.
+  final VoidCallback? aoAlertasCuidador;
 
   /// "Histórico de tomas": abre o ecrã do histórico.
   final VoidCallback? aoHistorico;
@@ -675,7 +679,9 @@ class MaisEcra extends StatelessWidget {
             linha(
               Icones.escudo,
               'Alertas ao cuidador',
-              aoTocar: () => _emBreve(context, 'Os alertas ao cuidador'),
+              aoTocar:
+                  aoAlertasCuidador ??
+                  () => _emBreve(context, 'Os alertas ao cuidador'),
             ),
             linha(
               Icones.alertaCirculo,
@@ -696,7 +702,7 @@ class MaisEcra extends StatelessWidget {
               aoTocar: () => aoMudarTema(!escuro),
               fim: Padding(
                 padding: const EdgeInsets.only(left: 14),
-                child: _Interruptor(ligado: escuro),
+                child: Interruptor(ligado: escuro),
               ),
             ),
             linha(
@@ -729,34 +735,3 @@ class MaisEcra extends StatelessWidget {
   }
 }
 
-/// O interruptor do design: 52x32, ligado = verde-azulado com a bola à direita, desligado = contorno.
-class _Interruptor extends StatelessWidget {
-  const _Interruptor({required this.ligado});
-  final bool ligado;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.t;
-    return ExcludeSemantics(
-      child: Container(
-        width: 52,
-        height: 32,
-        padding: const EdgeInsets.all(3),
-        alignment: ligado ? Alignment.centerRight : Alignment.centerLeft,
-        decoration: BoxDecoration(
-          color: ligado ? t.primaria : t.superficie2,
-          borderRadius: BorderRadius.circular(16),
-          border: ligado ? null : Border.all(color: t.texto2, width: 2),
-        ),
-        child: Container(
-          width: ligado ? 26 : 22,
-          height: ligado ? 26 : 22,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: ligado ? t.sobrePrimaria : t.texto2,
-          ),
-        ),
-      ),
-    );
-  }
-}

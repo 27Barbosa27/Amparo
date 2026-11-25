@@ -70,6 +70,11 @@ abstract class Repositorio {
   /// Muda o tamanho do texto do perfil (o modo simples aplica-o). Só quem tem o papel de "owner"
   /// pode alterar; o telemóvel de uma pessoa ligada por código não pode.
   Future<Perfil> atualizarTamanhoTexto(String perfilId, TamanhoTexto tamanhoTexto);
+
+  /// As preferências de alerta do cuidador que entrou, para este perfil.
+  Future<AlertasPrefs> alertasPrefs(String perfilId);
+
+  Future<AlertasPrefs> atualizarAlertasPrefs(String perfilId, AlertasPrefs prefs);
 }
 
 class RegistoNaoPermitido implements Exception {

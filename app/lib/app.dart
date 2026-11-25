@@ -21,6 +21,7 @@ import 'ui/componentes/resultado.dart';
 import 'ui/componentes/icones.dart';
 import 'ui/componentes/ilha_navegacao.dart';
 import 'ui/ecras/adicionar_pessoa.dart';
+import 'ui/ecras/alertas_cuidador.dart';
 import 'ui/ecras/criar_conta.dart';
 import 'ui/ecras/cuidador_hoje.dart';
 import 'ui/ecras/entrar.dart';
@@ -891,6 +892,15 @@ class _AmparoAppState extends State<AmparoApp> {
                     _somAlarme = s;
                     _sonsImportados = importados;
                   }),
+                ),
+              ),
+            ),
+            aoAlertasCuidador: () => Navigator.of(context).push(
+              rotaPagina<void>(
+                AlertasCuidadorEcra(
+                  repositorio: widget.repositorio,
+                  perfil: _controlador!.perfil,
+                  proprio: proprio,
                 ),
               ),
             ),

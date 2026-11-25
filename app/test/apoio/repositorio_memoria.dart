@@ -76,6 +76,21 @@ class RepositorioMemoria implements Repositorio {
     return novo;
   }
 
+  final Map<String, AlertasPrefs> _alertasPrefs = {};
+
+  @override
+  Future<AlertasPrefs> alertasPrefs(String perfilId) async =>
+      _alertasPrefs[perfilId] ?? const AlertasPrefs();
+
+  @override
+  Future<AlertasPrefs> atualizarAlertasPrefs(
+    String perfilId,
+    AlertasPrefs prefs,
+  ) async {
+    _alertasPrefs[perfilId] = prefs;
+    return prefs;
+  }
+
   @override
   Future<List<Toma>> tomasDeHoje(String perfilId, DateTime agora) async =>
       List.unmodifiable(_tomas[perfilId] ?? const []);

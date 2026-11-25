@@ -5,6 +5,38 @@ import '../../tema/tokens.dart';
 import 'estilo.dart';
 import 'icones.dart';
 
+/// O interruptor do design: 52x32, ligado = verde-azulado com a bola à direita, desligado = contorno.
+class Interruptor extends StatelessWidget {
+  const Interruptor({super.key, required this.ligado});
+  final bool ligado;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    return ExcludeSemantics(
+      child: Container(
+        width: 52,
+        height: 32,
+        padding: const EdgeInsets.all(3),
+        alignment: ligado ? Alignment.centerRight : Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: ligado ? t.primaria : t.superficie2,
+          borderRadius: BorderRadius.circular(16),
+          border: ligado ? null : Border.all(color: t.texto2, width: 2),
+        ),
+        child: Container(
+          width: ligado ? 26 : 22,
+          height: ligado ? 26 : 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: ligado ? t.sobrePrimaria : t.texto2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// O fundo em gradiente do design (escuro em cima, mais claro em baixo).
 class FundoGradiente extends StatelessWidget {
   const FundoGradiente({super.key, required this.child});
