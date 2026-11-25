@@ -84,7 +84,8 @@ class _AmparoAppState extends State<AmparoApp> {
   late bool _escuro = widget.escuroInicial;
 
   /// Sem campo no perfil (nem design próprio): fica só nesta sessão, como o modo escuro.
-  SomAlarme _somAlarme = SomAlarme.sino;
+  /// Se for importado, os bytes também ficam só em memória (nunca vão para a API).
+  EscolhaSomAlarme _somAlarme = const SomEmbutido(SomAlarme.sino);
 
   /// Só para abrir ecrãs empurrados em desenvolvimento (`TELA=pessoa-nova`, `receita-nova`).
   final _navegador = GlobalKey<NavigatorState>();

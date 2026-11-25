@@ -42,6 +42,8 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   google_sign_in: ^7.2.0
   google_sign_in_web: ^1.1.3
+  audioplayers: ^6.5.1
+  file_picker: ^13.4.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -61,6 +63,7 @@ flutter:
 
   assets:
     - assets/lottie/
+    - assets/sons/
 
   # Plus Jakarta Sans (licença OFL em assets/fonts/OFL.txt): a fonte variável serve todos os pesos do design.
   fonts:
