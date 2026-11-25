@@ -147,7 +147,7 @@ const paraReceita = (l: LinhaReceita, chave: Buffer): Receita => {
     fim: l.fim_utc,
     validaAte: l.valida_ate,
     unidadesIniciais: l.unidades_iniciais,
-    stock: calcularStock(dose, horario, l.unidades_iniciais, l.tomadas),
+    stock: calcularStock(dose, horario, l.unidades_iniciais, l.tomadas, l.fim_utc),
     ativa: l.ativa,
     geracao: { estado: l.geracao_estado, tomasGeradas: l.geracao_tomas },
   };

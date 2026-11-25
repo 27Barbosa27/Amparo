@@ -330,6 +330,7 @@ class RepositorioApi implements Repositorio {
             unidadesIniciais: r['unidadesIniciais'] as int?,
             unidadesRestantes: (stock?['unidadesRestantes'] as num?)?.round(),
             diasRestantes: dias,
+            emFalta: (stock?['emFalta'] as num?)?.round(),
             fracaoTempo: fracaoTempo,
           );
         }(),

@@ -112,6 +112,8 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
     text: '${(_inicial?.duracao ?? Duracao.tresMeses).meses}',
   );
   String? _erroMeses;
+  final _unidades = TextEditingController();
+  String? _erroUnidades;
   late TipoMedicacao _tipo = _inicial?.tipo ?? TipoMedicacao.comprimido;
   String? _erroMedicamento, _erroDose, _erroHora, _erroOutra;
 
@@ -132,6 +134,7 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
     _hora.dispose();
     _horasOutra.dispose();
     _meses.dispose();
+    _unidades.dispose();
     super.dispose();
   }
 
@@ -173,7 +176,18 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
         meses = n;
       }
     }
+    // "Quantos tem?": obrigatório ao criar (sem isto não há aviso de que o stock não chega); ao editar não se pergunta.
+    int? unidades;
+    String? eUnidades;
+    if (widget.editar == null) {
+      unidades = int.tryParse(_unidades.text.trim());
+      if (unidades == null || unidades < 1 || unidades > 100000) {
+        unidades = null;
+        eUnidades = 'Escreva quantas unidades tem, por exemplo 24.';
+      }
+    }
     setState(() {
+      _erroUnidades = eUnidades;
       _erroMeses = eMeses;
       _erroMedicamento = eMed;
       _erroDose = eDose;
@@ -184,7 +198,8 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
         eDose != null ||
         eHora != null ||
         eOutra != null ||
-        eMeses != null) {
+        eMeses != null ||
+        eUnidades != null) {
       return;
     }
     widget.aoContinuar(
@@ -198,6 +213,7 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
         duracao: Duracao(meses),
         horasOutra: outras,
         tipo: _tipo,
+        unidades: unidades,
       ),
     );
   }
@@ -240,6 +256,18 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
           erro: _erroDose,
           aoMudar: (_) => setState(() => _erroDose = null),
         ),
+        if (widget.editar == null) ...[
+          const SizedBox(height: 14),
+          CampoTexto(
+            rotulo: 'Quantos tem agora?',
+            dica: 'Ex.: 24',
+            controlador: _unidades,
+            teclado: TextInputType.number,
+            maxLength: 6,
+            erro: _erroUnidades,
+            aoMudar: (_) => setState(() => _erroUnidades = null),
+          ),
+        ],
         const SizedBox(height: 14),
         GrelhaOpcoes<Frequencia>(
           titulo: 'Com que frequência?',
@@ -431,13 +459,18 @@ class _CarregarReceitaEcraState extends State<CarregarReceitaEcra> {
               duration: const Duration(milliseconds: 300),
               child: _fase != _Fase.feito
                   ? const _RodaAGirar(tamanho: 88, traco: 5)
-                  : SeloIcone(
-                      key: const ValueKey('feito'),
-                      cor: t.ok,
-                      dados: Icones.visto,
-                      corIcone: t.superficie,
-                      tamanho: 88,
-                      traco: 2.4,
+                  // A mesma animação de sucesso dos outros ecrãs. O visto ocupa só parte do desenho,
+                  // por isso este fica maior do que a caixa de 88 px e deixa-se transbordar.
+                  : const OverflowBox(
+                      key: ValueKey('feito'),
+                      maxWidth: 176,
+                      maxHeight: 176,
+                      child: AnimacaoLottie(
+                        asset: 'assets/lottie/sucesso.json',
+                        largura: 176,
+                        altura: 176,
+                        descricao: 'Concluído com sucesso',
+                      ),
                     ),
             ),
           ),

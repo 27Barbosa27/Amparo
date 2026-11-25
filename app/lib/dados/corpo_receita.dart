@@ -24,6 +24,7 @@ Map<String, Object?> corpoDaReceita(
     'horario': horario,
     'inicio': inicio.toUtc().toIso8601String(),
     'fim': r.duracao.fimDe(inicio).toUtc().toIso8601String(),
+    if (r.unidades != null) 'unidadesIniciais': r.unidades,
   };
 }
 

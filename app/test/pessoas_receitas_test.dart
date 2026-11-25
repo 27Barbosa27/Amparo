@@ -100,6 +100,28 @@ void main() {
       },
     );
 
+    test(
+      'as unidades que a pessoa tem seguem para a API; sem elas, não vai nada',
+      () {
+        final sem = corpoDaReceita(receita(Frequencia.umaVezDia), 'm1', agora);
+        expect(sem.containsKey('unidadesIniciais'), isFalse);
+        final com = corpoDaReceita(
+          NovaReceita(
+            medicamento: 'Lisinopril 10 mg',
+            dose: '1 comprimido',
+            frequencia: Frequencia.duasVezesDia,
+            hora: 8,
+            minuto: 0,
+            duracao: Duracao.tresMeses,
+            unidades: 24,
+          ),
+          'm1',
+          agora,
+        );
+        expect(com['unidadesIniciais'], 24);
+      },
+    );
+
     test('"2 vezes ao dia" são duas horas fixas, 12 horas depois uma da outra, e começam já', () {
       final c = corpoDaReceita(
         receita(Frequencia.duasVezesDia, hora: '09:30'),
@@ -282,12 +304,16 @@ void main() {
     ) async {
       await abrirFormulario(tester, RepositorioMemoria(agora: agora));
       await tester.enterText(find.byType(TextField).at(1), '');
-      await tester.enterText(find.byType(TextField).at(2), '25:99');
+      await tester.enterText(find.byType(TextField).at(3), '25:99');
       await tester.tap(find.text('Criar tomas e alarmes'));
       await tester.pumpAndSettle();
       expect(find.text('Escreva o nome do medicamento.'), findsOneWidget);
       expect(
         find.text('Escreva a dose (por exemplo, 1 comprimido).'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Escreva quantas unidades tem, por exemplo 24.'),
         findsOneWidget,
       );
       expect(find.text('Escreva uma hora como 08:00.'), findsOneWidget);
@@ -301,7 +327,8 @@ void main() {
       expect(find.text('Horas das tomas'), findsOneWidget);
       expect(find.text('Primeira toma'), findsNothing);
       await tester.enterText(find.byType(TextField).at(0), 'Ramipril 5 mg');
-      await tester.enterText(find.byType(TextField).at(2), 'de manhã');
+      await tester.enterText(find.byType(TextField).at(2), '24');
+      await tester.enterText(find.byType(TextField).at(3), 'de manhã');
       await tester.tap(find.text('Criar tomas e alarmes'));
       await tester.pumpAndSettle();
       expect(find.text('Use horas como 08:00, 14:00, 21:00.'), findsOneWidget);
@@ -314,8 +341,9 @@ void main() {
         await tester.enterText(find.byType(TextField).at(0), 'Ramipril 5 mg');
         await tester.tap(find.text('1 vez ao dia'));
         await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField).at(2), '21:00');
-        await tester.enterText(find.byType(TextField).at(3), '3');
+        await tester.enterText(find.byType(TextField).at(2), '24');
+        await tester.enterText(find.byType(TextField).at(3), '21:00');
+        await tester.enterText(find.byType(TextField).at(4), '3');
         await tester.pumpAndSettle();
         await tester.tap(find.text('Criar tomas e alarmes'));
         await tester.pumpAndSettle();
@@ -348,6 +376,7 @@ void main() {
     ) async {
       await abrirFormulario(tester, RepositorioMemoria(agora: agora));
       await tester.enterText(find.byType(TextField).at(0), 'Ramipril 5 mg');
+      await tester.enterText(find.byType(TextField).at(2), '24');
       await tester.tap(find.text('Criar tomas e alarmes'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Continuar'));
@@ -368,6 +397,7 @@ void main() {
       (tester) async {
         await abrirFormulario(tester, RepositorioQueFalha(agora: agora));
         await tester.enterText(find.byType(TextField).at(0), 'Ramipril 5 mg');
+        await tester.enterText(find.byType(TextField).at(2), '24');
         await tester.tap(find.text('Criar tomas e alarmes'));
         await tester.pumpAndSettle();
         expect(find.text('Não foi possível guardar'), findsOneWidget);
@@ -397,6 +427,7 @@ void main() {
       final repo = RepositorioQueFalha(agora: agora, falhas: 5);
       await abrirFormulario(tester, repo);
       await tester.enterText(find.byType(TextField).at(0), 'Ramipril 5 mg');
+      await tester.enterText(find.byType(TextField).at(2), '24');
       await tester.tap(find.text('Criar tomas e alarmes'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cancelar'));

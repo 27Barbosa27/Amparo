@@ -349,6 +349,15 @@ class _LinhaReceita extends StatelessWidget {
                     : '${receita.dose} · ${receita.horario}',
                 style: Estilos.corpo(t, peso: FontWeight.w500, cor: t.texto2),
               ),
+              if (receita.naoChega) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Só chega para $dias ${dias == 1 ? 'dia' : 'dias'}: '
+                  'faltam cerca de ${receita.emFalta} '
+                  '${receita.emFalta == 1 ? 'unidade' : 'unidades'} até ao fim da receita.',
+                  style: Estilos.corpo(t, peso: FontWeight.w700, cor: t.avisoTexto),
+                ),
+              ],
             ],
           ),
         ),

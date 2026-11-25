@@ -80,9 +80,9 @@ describe('Cálculo de stock', () => {
   });
   it('calcula unidades e dias que restam', () => {
     const fixas: Horario = { tipo: 'horas_fixas', horasLocais: ['08:00', '20:00'] };
-    expect(calcularStock('1 comprimido', fixas, 30, 2)).toEqual({ unidadesRestantes: 28, diasRestantes: 14 });
-    expect(calcularStock('2 comprimidos', { tipo: 'intervalo', intervaloHoras: 8 }, 60, 3)).toEqual({ unidadesRestantes: 54, diasRestantes: 9 });
-    expect(calcularStock('1 comprimido', fixas, 2, 10)).toEqual({ unidadesRestantes: 0, diasRestantes: 0 });
+    expect(calcularStock('1 comprimido', fixas, 30, 2)).toEqual({ unidadesRestantes: 28, diasRestantes: 14, emFalta: null });
+    expect(calcularStock('2 comprimidos', { tipo: 'intervalo', intervaloHoras: 8 }, 60, 3)).toEqual({ unidadesRestantes: 54, diasRestantes: 9, emFalta: null });
+    expect(calcularStock('1 comprimido', fixas, 2, 10)).toEqual({ unidadesRestantes: 0, diasRestantes: 0, emFalta: null });
     expect(calcularStock('1 comprimido', fixas, null, 0)).toBeNull();
   });
 });
@@ -382,10 +382,10 @@ describe('Detalhe da toma e stock da receita', () => {
     const p = await perfil(a);
     const t = await umaToma(a, p, -5 * MIN, { unidadesIniciais: 30, horario: { tipo: 'horas_fixas', horasLocais: ['08:00', '20:00'] } });
     const antes = await request(app).get(`/profiles/${p}/receitas/${t.receitaId}`).set(auth(a));
-    expect(antes.body.receita.stock).toEqual({ unidadesRestantes: 30, diasRestantes: 15 });
+    expect(antes.body.receita.stock).toMatchObject({ unidadesRestantes: 30, diasRestantes: 15 });
     await request(app).post(`/tomas/${t.tomaId}/registo`).set(auth(a, p)).send({});
     const depois = await request(app).get(`/profiles/${p}/receitas/${t.receitaId}`).set(auth(a));
-    expect(depois.body.receita.stock).toEqual({ unidadesRestantes: 29, diasRestantes: 14 });
+    expect(depois.body.receita.stock).toMatchObject({ unidadesRestantes: 29, diasRestantes: 14 });
   });
 });
 

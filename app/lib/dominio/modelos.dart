@@ -346,6 +346,7 @@ class NovaReceita {
     required this.duracao,
     this.horasOutra = const [],
     this.tipo = TipoMedicacao.comprimido,
+    this.unidades,
   });
 
   final String medicamento;
@@ -357,6 +358,9 @@ class NovaReceita {
   final int hora;
   final int minuto;
   final Duracao duracao;
+
+  /// Quantas unidades (comprimidos, gotas...) a pessoa tem agora. Obrigatório ao criar; nulo ao editar.
+  final int? unidades;
 
   /// Só para `Frequencia.outra`: as horas escolhidas ("08:00", "14:00"...).
   final List<String> horasOutra;
@@ -394,6 +398,7 @@ class Receita {
     this.unidadesIniciais,
     this.unidadesRestantes,
     this.diasRestantes,
+    this.emFalta,
     this.medicamentoId = '',
     this.intervaloHoras,
     this.horasFixas = const [],
@@ -423,6 +428,12 @@ class Receita {
   final int? unidadesIniciais;
   final int? unidadesRestantes;
   final int? diasRestantes;
+
+  /// Unidades que faltam para chegar ao fim da receita (0 se o stock chega). Nulo sem stock.
+  final int? emFalta;
+
+  /// O stock não chega até ao fim da receita.
+  bool get naoChega => (emFalta ?? 0) > 0;
 
   /// Fração do stock que resta (0 a 1), para a barra. Nula se não há unidades iniciais.
   double? get fracaoRestante {

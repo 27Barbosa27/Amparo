@@ -23,14 +23,31 @@ export interface Stock {
   unidadesRestantes: number;
   /** Dias que ainda chegam ao ritmo da receita. É um indicador, não stock completo. */
   diasRestantes: number | null;
+  /** Unidades que faltam para chegar ao fim da receita. 0 quando o stock chega; nulo sem fim ou sem consumo. */
+  emFalta: number | null;
 }
 
-/** "Restam N dias" = unidades restantes / consumo diário (unidades iniciais menos as tomas tomadas). */
-export function calcularStock(dose: string, horario: Horario, unidadesIniciais: number | null, tomadas: number): Stock | null {
+/**
+ * "Restam N dias" = unidades restantes / consumo diário (unidades iniciais menos as tomas tomadas).
+ * Com o `fim` da receita, diz também quantas unidades faltam para lá chegar.
+ */
+export function calcularStock(
+  dose: string,
+  horario: Horario,
+  unidadesIniciais: number | null,
+  tomadas: number,
+  fim: Date | null = null,
+  agora: Date = new Date(),
+): Stock | null {
   if (unidadesIniciais === null) return null;
   const porToma = unidadesPorToma(dose);
   const unidadesRestantes = Math.max(0, unidadesIniciais - tomadas * porToma);
   const tomasPorDia = horario.tipo === 'horas_fixas' ? horario.horasLocais.length : 24 / horario.intervaloHoras;
   const consumoDia = tomasPorDia * porToma;
-  return { unidadesRestantes, diasRestantes: consumoDia > 0 ? Math.floor(unidadesRestantes / consumoDia) : null };
+  const diasAteFim = fim ? Math.max(0, (fim.getTime() - agora.getTime()) / 86_400_000) : null;
+  return {
+    unidadesRestantes,
+    diasRestantes: consumoDia > 0 ? Math.floor(unidadesRestantes / consumoDia) : null,
+    emFalta: consumoDia > 0 && diasAteFim !== null ? Math.max(0, Math.ceil(consumoDia * diasAteFim - unidadesRestantes)) : null,
+  };
 }

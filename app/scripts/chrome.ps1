@@ -33,6 +33,13 @@ $argumentos = "run -d web-server --web-port $Porta --web-hostname 127.0.0.1"
 if ($Tela) { $argumentos += " --dart-define=TELA=$Tela" }
 if ($Api) { $argumentos += " --dart-define=API_URL=$Api" }
 
+# O ID de cliente web da Google vem do backend\.env (o primeiro de GOOGLE_CLIENT_IDS), para não o escrever em dois sítios.
+$envBackend = Join-Path (Split-Path -Parent $projeto) 'backend\.env'
+if (Test-Path $envBackend) {
+    $linha = Get-Content $envBackend | Where-Object { $_ -match '^GOOGLE_CLIENT_IDS=\s*\S' } | Select-Object -First 1
+    if ($linha) { $argumentos += " --dart-define=GOOGLE_CLIENT_ID=$((($linha -split '=', 2)[1] -split ',')[0].Trim())" }
+}
+
 # O Flutter corre com a entrada redirecionada, para eu lhe poder escrever "r" quando gravas um ficheiro.
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = $flutter

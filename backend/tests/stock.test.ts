@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Horario } from '../src/medicacao/servico.js';
 import { calcularStock, unidadesPorToma } from '../src/medicacao/stock.js';
 
 describe('Unidades por toma', () => {
@@ -25,7 +26,24 @@ describe('Unidades por toma', () => {
 
   it('os dias que restam não ficam a zero por causa da concentração (o bug visto com dados reais)', () => {
     const fixas = { tipo: 'horas_fixas', horasLocais: ['09:00'] } as const;
-    expect(calcularStock('10 mg', { ...fixas, horasLocais: ['09:00'] }, 40, 7)).toEqual({ unidadesRestantes: 33, diasRestantes: 33 });
-    expect(calcularStock('20 mg', { tipo: 'horas_fixas', horasLocais: ['21:00'] }, 40, 3)).toEqual({ unidadesRestantes: 37, diasRestantes: 37 });
+    expect(calcularStock('10 mg', { ...fixas, horasLocais: ['09:00'] }, 40, 7)).toEqual({ unidadesRestantes: 33, diasRestantes: 33, emFalta: null });
+    expect(calcularStock('20 mg', { tipo: 'horas_fixas', horasLocais: ['21:00'] }, 40, 3)).toEqual({ unidadesRestantes: 37, diasRestantes: 37, emFalta: null });
+  });
+
+  it('diz quantas unidades faltam até ao fim da receita (24 comprimidos, 2 por dia, 3 meses)', () => {
+    const agora = new Date('2026-11-25T08:00:00Z');
+    const fim = new Date('2027-02-23T08:00:00Z'); // 90 dias
+    const duasVezes: Horario = { tipo: 'horas_fixas', horasLocais: ['08:00', '20:00'] };
+    // 2 comprimidos por toma, 2 tomas por dia = 4 por dia: 24 chegam para 6 dias, em 90 dias faltam 336.
+    expect(calcularStock('2 comprimidos', duasVezes, 24, 0, fim, agora)).toEqual({ unidadesRestantes: 24, diasRestantes: 6, emFalta: 336 });
+    // 1 comprimido por toma: 2 por dia, 24 chegam para 12 dias, faltam 156.
+    expect(calcularStock('1 comprimido', duasVezes, 24, 0, fim, agora)).toEqual({ unidadesRestantes: 24, diasRestantes: 12, emFalta: 156 });
+  });
+
+  it('não falta nada quando o stock chega, nem depois do fim da receita', () => {
+    const agora = new Date('2026-11-25T08:00:00Z');
+    const umaVez: Horario = { tipo: 'horas_fixas', horasLocais: ['08:00'] };
+    expect(calcularStock('1 comprimido', umaVez, 100, 0, new Date('2026-12-25T08:00:00Z'), agora)?.emFalta).toBe(0);
+    expect(calcularStock('1 comprimido', umaVez, 5, 0, new Date('2026-11-01T08:00:00Z'), agora)?.emFalta).toBe(0);
   });
 });
