@@ -50,15 +50,8 @@ class IdosoHoje extends StatelessWidget {
             )
             .toList();
         final cuidador = controlador.nomeCuidador;
-        // O texto cresce com a definição da pessoa, em cima da do sistema (que já conta).
-        final media = MediaQuery.of(context);
-        final base = media.textScaler.scale(15) / 15;
-        return MediaQuery(
-          data: media.copyWith(
-            textScaler: TextScaler.linear(
-              base * controlador.perfil.tamanhoTexto.escala,
-            ),
-          ),
+        return EscalarTexto(
+          escala: controlador.perfil.tamanhoTexto.escala,
           child: SafeArea(
             // O rodapé ("Ligar à Ana") fica encostado em baixo quando sobra espaço (`margin-top: auto`).
             child: CustomScrollView(

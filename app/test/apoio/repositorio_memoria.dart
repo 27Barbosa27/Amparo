@@ -56,11 +56,25 @@ class RepositorioMemoria implements Repositorio {
     Perfil(id: 'manuel', nome: 'Manuel'),
   ];
 
+  /// Alterações guardadas por [atualizarTamanhoTexto] (sobrepõem-se a [_perfis] e [_perfisExtra]).
+  final Map<String, Perfil> _alteracoes = {};
+
   @override
   Future<List<Perfil>> perfis() async => [
-    if (!_vazio) ..._perfis,
-    ..._perfisExtra,
+    for (final p in [if (!_vazio) ..._perfis, ..._perfisExtra])
+      _alteracoes[p.id] ?? p,
   ];
+
+  @override
+  Future<Perfil> atualizarTamanhoTexto(
+    String perfilId,
+    TamanhoTexto tamanhoTexto,
+  ) async {
+    final atual = (await perfis()).firstWhere((p) => p.id == perfilId);
+    final novo = atual.copiarCom(tamanhoTexto: tamanhoTexto);
+    _alteracoes[perfilId] = novo;
+    return novo;
+  }
 
   @override
   Future<List<Toma>> tomasDeHoje(String perfilId, DateTime agora) async =>

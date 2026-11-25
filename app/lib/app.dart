@@ -32,6 +32,7 @@ import 'ui/ecras/receita_nova.dart';
 import 'ui/ecras/recuperar_senha.dart';
 import 'ui/ecras/verificar_email.dart';
 import 'ui/ecras/sucesso_marcada.dart';
+import 'ui/ecras/tamanho_texto.dart';
 
 /// A raiz da app. Recebe o repositório (dados falsos por agora, a API depois) e o relógio (para os testes).
 class AmparoApp extends StatefulWidget {
@@ -336,6 +337,37 @@ class _AmparoAppState extends State<AmparoApp> {
           perfil: pessoa,
           relogio: widget.relogio,
           aoConcluir: () => _navegador.currentState?.popUntil((r) => r.isFirst),
+        ),
+      ),
+    );
+  }
+
+  /// "Tamanho do texto": funciona tanto para a pessoa acompanhada como para o perfil próprio do cuidador.
+  void _tamanhoTexto(BuildContext context) {
+    final perfil = _controlador!.perfil;
+    Navigator.of(context).push(
+      rotaPagina<void>(
+        TamanhoTextoEcra(
+          perfil: perfil,
+          proprio: eProprioCuidador(perfil, widget.autenticacao.nome),
+          aoGuardar: (tamanho) async {
+            try {
+              final atualizado = await widget.repositorio.atualizarTamanhoTexto(
+                perfil.id,
+                tamanho,
+              );
+              _perfis = [
+                for (final p in _perfis)
+                  p.id == atualizado.id ? atualizado : p,
+              ];
+              _abrirPerfil(atualizado);
+              return null;
+            } on ErroApi catch (e) {
+              return e.codigo;
+            } catch (_) {
+              return 'falha_ao_guardar';
+            }
+          },
         ),
       ),
     );
@@ -797,6 +829,12 @@ class _AmparoAppState extends State<AmparoApp> {
           aoSairDaPreVisualizacao: () => setState(() => _modo = _Modo.cuidador),
         );
       case _Modo.cuidador:
+        // Sem "modo simples" próprio: quem cuida de si mesmo só usa estes ecrãs, por isso o
+        // tamanho de texto que escolheu tem de se aplicar aqui (e não só ao IdosoHoje).
+        final proprio = eProprioCuidador(
+          _controlador!.perfil,
+          widget.autenticacao.nome,
+        );
         final destinos = const [
           DestinoNav('Principal', Icones.calendario),
           DestinoNav('Receitas', Icones.documento),
@@ -818,15 +856,13 @@ class _AmparoAppState extends State<AmparoApp> {
           ),
           _ => MaisEcra(
             perfil: _controlador!.perfil,
-            proprio: eProprioCuidador(
-              _controlador!.perfil,
-              widget.autenticacao.nome,
-            ),
+            proprio: proprio,
             cuidador: widget.autenticacao.nome,
             adesao: percentagemAdesao(_controlador!.semana),
             aoMudarDePerfil: () => _trocarPerfil(context),
             aoTelemoveisLigados: () =>
                 _ligarTelemovel(context, _controlador!.perfil),
+            aoTamanhoTexto: () => _tamanhoTexto(context),
             aoHistorico: () => Navigator.of(context).push(
               rotaPagina<void>(
                 HistoricoTomasEcra(
@@ -844,7 +880,7 @@ class _AmparoAppState extends State<AmparoApp> {
             aoTerminarSessao: _terminarSessao,
           ),
         };
-        return Stack(
+        final conteudo = Stack(
           children: [
             pagina,
             IlhaNavegacao(
@@ -857,6 +893,12 @@ class _AmparoAppState extends State<AmparoApp> {
             ),
           ],
         );
+        return proprio
+            ? EscalarTexto(
+                escala: _controlador!.perfil.tamanhoTexto.escala,
+                child: conteudo,
+              )
+            : conteudo;
     }
   }
 }

@@ -66,6 +66,10 @@ abstract class Repositorio {
 
   /// Quem cuida da pessoa, para o botão "Ligar à Ana".
   Future<String?> nomeDoCuidador(String perfilId);
+
+  /// Muda o tamanho do texto do perfil (o modo simples aplica-o). Só quem tem o papel de "owner"
+  /// pode alterar; o telemóvel de uma pessoa ligada por código não pode.
+  Future<Perfil> atualizarTamanhoTexto(String perfilId, TamanhoTexto tamanhoTexto);
 }
 
 class RegistoNaoPermitido implements Exception {

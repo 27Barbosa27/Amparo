@@ -23,6 +23,12 @@ class Perfil {
   final String nome;
 
   String get inicial => nome.isEmpty ? '?' : nome.substring(0, 1).toUpperCase();
+
+  Perfil copiarCom({TamanhoTexto? tamanhoTexto}) => Perfil(
+    id: id,
+    nome: nome,
+    tamanhoTexto: tamanhoTexto ?? this.tamanhoTexto,
+  );
 }
 
 /// O cuidador também pode tomar medicação: o perfil dele tem o mesmo nome que a conta.

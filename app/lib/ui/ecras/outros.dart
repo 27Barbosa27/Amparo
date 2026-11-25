@@ -383,10 +383,14 @@ class MaisEcra extends StatelessWidget {
     this.proprio = false,
     this.aoTelemoveisLigados,
     this.aoHistorico,
+    this.aoTamanhoTexto,
   });
 
   /// "Histórico de tomas": abre o ecrã do histórico.
   final VoidCallback? aoHistorico;
+
+  /// "Tamanho do texto": abre o ecrã de escolha (Normal/Grande/Muito grande).
+  final VoidCallback? aoTamanhoTexto;
 
   /// "Telemóveis ligados": mostra um código para ligar o telemóvel da pessoa.
   final VoidCallback? aoTelemoveisLigados;
@@ -647,7 +651,9 @@ class MaisEcra extends StatelessWidget {
               Icones.textoAa,
               'Tamanho do texto',
               valor: _tamanho(perfil.tamanhoTexto),
-              aoTocar: () => _emBreve(context, 'O tamanho do texto'),
+              aoTocar:
+                  aoTamanhoTexto ??
+                  () => _emBreve(context, 'O tamanho do texto'),
               primeira: true,
             ),
             linha(

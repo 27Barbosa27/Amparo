@@ -54,6 +54,24 @@ class _PintorInterior extends CustomPainter {
       antigo.raio != raio || antigo.sombras != sombras;
 }
 
+/// Aplica a escala de tamanho de texto do perfil por cima da do sistema (que já conta): o modo
+/// simples usa-a sempre; o próprio cuidador também, quando o perfil é o dele (ver `eProprioCuidador`).
+class EscalarTexto extends StatelessWidget {
+  const EscalarTexto({super.key, required this.escala, required this.child});
+  final double escala;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final base = media.textScaler.scale(15) / 15;
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.linear(base * escala)),
+      child: child,
+    );
+  }
+}
+
 /// Caixa com relevo, como os avatares, o círculo do alarme e a caixa da cápsula do design:
 /// cor de fundo, dois brilhos radiais por cima, sombras interiores e uma sombra grande por baixo.
 class Relevo extends StatelessWidget {

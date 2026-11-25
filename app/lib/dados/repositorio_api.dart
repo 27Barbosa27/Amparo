@@ -244,6 +244,31 @@ class RepositorioApi implements Repositorio {
   }
 
   @override
+  Future<Perfil> atualizarTamanhoTexto(
+    String perfilId,
+    TamanhoTexto tamanhoTexto,
+  ) async {
+    final j = await _api.pedir(
+      'PATCH',
+      '/profiles/$perfilId',
+      perfilId: perfilId,
+      corpo: {
+        'tamanhoTexto': switch (tamanhoTexto) {
+          TamanhoTexto.normal => 'normal',
+          TamanhoTexto.grande => 'grande',
+          TamanhoTexto.muitoGrande => 'muito_grande',
+        },
+      },
+    );
+    final p = j!['perfil'] as Map<String, dynamic>;
+    return Perfil(
+      id: p['id'] as String,
+      nome: p['pseudonimo'] as String,
+      tamanhoTexto: TamanhoTexto.daApi(p['tamanhoTexto']),
+    );
+  }
+
+  @override
   Future<Perfil> criarPessoa(NovaPessoa pessoa) async {
     final j = await _api.pedir(
       'POST',
