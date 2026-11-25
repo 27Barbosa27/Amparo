@@ -35,3 +35,4 @@ deploy/secrets/
 
 # Obsidian (definições locais do vault)
 docs/.obsidian/
+backend/secrets/

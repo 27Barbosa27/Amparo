@@ -15,6 +15,7 @@ App de lembretes e registo de medicação para cuidadores e para as pessoas que 
 - [[sintomas-e-efeitos]]: anotar o que se repara, ligado ao medicamento e à hora
 - [[diario-do-cuidador]]: caderno de passagem de turno entre cuidadores
 - [[diario-de-sinais]]: peso, tensão, glicemia e outros, só registo e gráfico (a decidir)
+- [[push-flutter]]: push (FCM) no lado da app: token, permissão e tratamento das mensagens
 - [[plano-pago]]: o que é gratuito, o que é pago e como se cobra (a decidir)
 
 ## Operação
