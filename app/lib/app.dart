@@ -31,6 +31,7 @@ import 'ui/ecras/outros.dart';
 import 'ui/ecras/receita_nova.dart';
 import 'ui/ecras/recuperar_senha.dart';
 import 'ui/ecras/verificar_email.dart';
+import 'ui/ecras/som_alarme.dart';
 import 'ui/ecras/sucesso_marcada.dart';
 import 'ui/ecras/tamanho_texto.dart';
 
@@ -81,6 +82,9 @@ enum _Modo {
 
 class _AmparoAppState extends State<AmparoApp> {
   late bool _escuro = widget.escuroInicial;
+
+  /// Sem campo no perfil (nem design próprio): fica só nesta sessão, como o modo escuro.
+  SomAlarme _somAlarme = SomAlarme.sino;
 
   /// Só para abrir ecrãs empurrados em desenvolvimento (`TELA=pessoa-nova`, `receita-nova`).
   final _navegador = GlobalKey<NavigatorState>();
@@ -875,6 +879,15 @@ class _AmparoAppState extends State<AmparoApp> {
             ),
             escuro: _escuro,
             aoMudarTema: (v) => setState(() => _escuro = v),
+            somAlarme: _somAlarme,
+            aoSomAlarme: () => Navigator.of(context).push(
+              rotaPagina<void>(
+                SomAlarmeEcra(
+                  atual: _somAlarme,
+                  aoGuardar: (s) => setState(() => _somAlarme = s),
+                ),
+              ),
+            ),
             aoVerComoAPessoaVe: () =>
                 setState(() => _modo = _Modo.previewPessoa),
             aoTerminarSessao: _terminarSessao,

@@ -10,6 +10,7 @@ import '../componentes/base.dart';
 import '../componentes/estilo.dart';
 import '../componentes/icones.dart';
 import 'cuidador_hoje.dart' show itemQueSobe;
+import 'som_alarme.dart' show SomAlarme;
 
 /// "Receitas" (design: Receitas): o aviso do que está a acabar, as receitas em dia com a barra do que resta,
 /// e "Adicionar receita".
@@ -384,6 +385,8 @@ class MaisEcra extends StatelessWidget {
     this.aoTelemoveisLigados,
     this.aoHistorico,
     this.aoTamanhoTexto,
+    this.somAlarme = SomAlarme.sino,
+    this.aoSomAlarme,
   });
 
   /// "Histórico de tomas": abre o ecrã do histórico.
@@ -391,6 +394,12 @@ class MaisEcra extends StatelessWidget {
 
   /// "Tamanho do texto": abre o ecrã de escolha (Normal/Grande/Muito grande).
   final VoidCallback? aoTamanhoTexto;
+
+  /// O som do alarme escolhido (mostra-se como valor da linha "Som do alarme").
+  final SomAlarme somAlarme;
+
+  /// "Som do alarme": abre o ecrã de escolha.
+  final VoidCallback? aoSomAlarme;
 
   /// "Telemóveis ligados": mostra um código para ligar o telemóvel da pessoa.
   final VoidCallback? aoTelemoveisLigados;
@@ -659,7 +668,9 @@ class MaisEcra extends StatelessWidget {
             linha(
               Icones.sino,
               'Som do alarme',
-              aoTocar: () => _emBreve(context, 'O som do alarme'),
+              valor: somAlarme.titulo,
+              aoTocar:
+                  aoSomAlarme ?? () => _emBreve(context, 'O som do alarme'),
             ),
             linha(
               Icones.escudo,
