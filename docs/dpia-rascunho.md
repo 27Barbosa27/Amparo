@@ -66,3 +66,7 @@
 - **Revisão:** a cada alteração relevante do tratamento e, pelo menos, uma vez por ano. Próxima revisão: `[a preencher]`.
 
 Aprovação: `[nome, cargo, data]`
+
+
+---
+Ver também: [[index]], [[plano]], [[deploy]], [[politica-privacidade-rascunho]]

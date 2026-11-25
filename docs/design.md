@@ -11,3 +11,7 @@ https://claude.ai/artifact/M1NgwcwbWDTxp2fK6r7s9R
 - Texto base de 15 px, títulos de cerca de 22 px, alvos de toque de 44 a 56 px.
 - Estilo minimalista com toques discretos de claymorphism (apenas em elementos decorativos) e vidro fosco na barra de navegação.
 - Animações Lottie na entrada, no registo, nos sucessos e nos erros. Na app real convém respeitar a definição "reduzir movimento" do sistema.
+
+
+---
+Ver também: [[index]], [[plano]]

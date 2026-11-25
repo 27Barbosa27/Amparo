@@ -61,3 +61,7 @@ Se mudarmos esta política de forma relevante, avisamos na app e pedimos de novo
 
 ---
 *Nota para quem publica:* o texto de consentimento mostrado no registo (`VERSAO_CONSENTIMENTO_ATUAL`, hoje `2026-11`) tem de corresponder a esta política. Quando mudar uma, mude a versão da outra.
+
+
+---
+Ver também: [[index]], [[plano]], [[dpia-rascunho]]

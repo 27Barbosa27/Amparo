@@ -215,3 +215,7 @@ audit_logs(id bigserial, ts_utc, user_id, profile_id, acao, entidade,
 - **Tamanho do PIN local:** 4 dígitos (como desenhado) vs 6, com limite de tentativas.
 - **Biometria no ecrã de desbloqueio:** o texto do botão ("Entrar com biometria") é neutro e serve para Face ID, impressão digital ou rosto; o ícone pode adaptar-se ao aparelho.
 - **Animações Lottie** nos ecrãs de Entrar e Criar conta (entrada de ~3 s, uma só vez): usar `lottie` no Flutter (pacote `lottie`) com os mesmos ficheiros JSON do design; manter em `assets/` e respeitar "reduzir movimento" do sistema na app real (mostrar o último fotograma).
+
+
+---
+Ver também: [[index]], [[design]], [[deploy]], [[dpia-rascunho]], [[politica-privacidade-rascunho]]

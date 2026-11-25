@@ -32,3 +32,6 @@ dist/
 *.sqlite
 pgdata/
 deploy/secrets/
+
+# Obsidian (definições locais do vault)
+docs/.obsidian/

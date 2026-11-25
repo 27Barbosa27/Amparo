@@ -95,3 +95,7 @@ O script cria um PostgreSQL descartável, restaura lá o backup e verifica as ta
 - **Conta Apple Developer** (paga) para push em iPhone real e para publicar.
 - **Escolher o fornecedor de email** (servidores na UE, DPA assinado) e pôr o `SMTP_URL`, `EMAIL_FROM` e `APP_LINK_BASE` no `.env.prod`. O código já está pronto e foi testado contra um servidor SMTP real; qualquer fornecedor com SMTP serve.
 - Aviso: o `npm audit` mostra 3 avisos moderados no `glob` usado pelo `node-pg-migrate`. Só corre as nossas migrações no deploy, sem dados de utilizadores, e o CI só falha a partir de severidade alta.
+
+
+---
+Ver também: [[index]], [[plano]], [[dpia-rascunho]]
