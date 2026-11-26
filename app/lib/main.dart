@@ -3,6 +3,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'app.dart';
+import 'dados/alarmes.dart';
 import 'dados/api.dart';
 import 'dados/autenticacao.dart';
 import 'dados/google.dart';
@@ -44,10 +45,13 @@ Future<void> main() async {
     base: Uri.parse(_apiUrl.isEmpty ? porOmissao : _apiUrl),
     sessao: sessao,
   );
+  final alarmes = criarServicoAlarmes();
+  await alarmes.iniciar();
   runApp(
     AmparoApp(
       repositorio: RepositorioApi(api),
       autenticacao: AutenticacaoApi(api),
+      alarmes: alarmes,
       // No Chrome, `?tela=...` no endereço faz o mesmo que `--dart-define=TELA=...` (só desenvolvimento).
       // `?claro=1` abre no tema claro (só desenvolvimento, para comparar com o design).
       escuroInicial: !(kIsWeb && Uri.base.queryParameters['claro'] == '1'),

@@ -13,7 +13,7 @@
 # com a app fechada: para isso usa o telemóvel virtual (scripts\emulador.ps1) ou um telemóvel a sério.
 param([string]$Tela = '', [int]$Porta = 8099, [string]$Api = '', [switch]$Parar)
 
-$flutter = 'C:\Users\zedop\flutter\bin\flutter.bat'
+$flutter = 'D:\flutter\bin\flutter.bat'
 $projeto = Split-Path -Parent $PSScriptRoot
 
 function Parar-Tudo {

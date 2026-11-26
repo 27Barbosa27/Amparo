@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../dados/alarmes.dart';
 import '../dados/api.dart';
 import '../dados/repositorio.dart';
 import '../dominio/modelos.dart';
@@ -14,11 +15,15 @@ class HojeControlador extends ChangeNotifier {
     required this.relogio,
     this.cuidador,
     this.aoSessaoExpirada,
+    this.alarmes = const ServicoAlarmesNulo(),
   });
 
   final Repositorio repositorio;
   final Perfil perfil;
   final Relogio relogio;
+
+  /// Alarmes locais das tomas: reagendados sempre que as tomas deste perfil são recarregadas.
+  final ServicoAlarmes alarmes;
 
   /// Quem está a usar a app, quando é um cuidador. Nulo no telemóvel da pessoa.
   final String? cuidador;
@@ -68,6 +73,7 @@ class HojeControlador extends ChangeNotifier {
       _tomas = [..._tomas]..sort((a, b) => a.agendada.compareTo(b.agendada));
       _semana = await repositorio.ultimos7Dias(perfil.id, agora);
       _nomeCuidador = await repositorio.nomeDoCuidador(perfil.id);
+      await alarmes.agendarParaTomas(_tomas);
     } on ErroApi catch (e) {
       _falhouCarregar = true;
       _erro = e.codigo;
@@ -85,6 +91,7 @@ class HojeControlador extends ChangeNotifier {
     try {
       final nova = await acao();
       _tomas = [for (final t in _tomas) t.id == nova.id ? nova : t];
+      await alarmes.agendarParaTomas(_tomas);
       notifyListeners();
       return true;
     } on RegistoNaoPermitido catch (e) {

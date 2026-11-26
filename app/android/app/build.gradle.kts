@@ -7,12 +7,15 @@ plugins {
 
 android {
     namespace = "pt.amparo.amparo"
-    compileSdk = flutter.compileSdkVersion
+    // SPIKE alarmes: flutter_local_notifications e permission_handler_android pedem SDK 37.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // SPIKE alarmes: flutter_local_notifications exige core library desugaring.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -47,4 +50,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // SPIKE alarmes: exigido pelo core library desugaring acima.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

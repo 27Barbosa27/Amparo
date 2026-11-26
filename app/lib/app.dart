@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:material_ui/material_ui.dart';
 
+import 'dados/alarmes.dart';
 import 'dados/api.dart';
 import 'dados/autenticacao.dart';
 import 'dados/google.dart';
@@ -48,6 +49,7 @@ class AmparoApp extends StatefulWidget {
     this.credenciaisDev,
     this.ligacao,
     this.google,
+    this.alarmes = const ServicoAlarmesNulo(),
   });
 
   /// "Entrar com a Google". Nulo: o botão avisa que ainda não está disponível.
@@ -55,6 +57,9 @@ class AmparoApp extends StatefulWidget {
 
   /// O telemóvel de uma pessoa acompanhada (liga-se com um código, sem conta). Nulo: não se oferece.
   final LigacaoDispositivo? ligacao;
+
+  /// Alarmes locais das tomas (docs/plano.md secção 3.3). `ServicoAlarmesNulo` por omissão: web e testes.
+  final ServicoAlarmes alarmes;
 
   final Repositorio repositorio;
   final Autenticacao autenticacao;
@@ -293,6 +298,7 @@ class _AmparoAppState extends State<AmparoApp> {
       perfil: perfil,
       relogio: widget.relogio,
       aoSessaoExpirada: _desligarDispositivo,
+      alarmes: widget.alarmes,
     )..carregar();
     _modo = _Modo.dispositivo;
   }
@@ -436,6 +442,7 @@ class _AmparoAppState extends State<AmparoApp> {
       relogio: widget.relogio,
       cuidador: widget.autenticacao.nome,
       aoSessaoExpirada: _voltarAEntrar,
+      alarmes: widget.alarmes,
     )..carregar();
     setState(() {});
   }
