@@ -5,8 +5,6 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-API-3178C6?logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 
-**Medication reminders for caregivers and the people they care for.**
-
 App de lembretes de medicação para cuidadores e para as pessoas de quem cuidam. Um cuidador acompanha várias pessoas, vê as tomas, recebe alertas e marca o que foi tomado. A pessoa acompanhada usa um modo simples e liga o telemóvel por código, sem criar conta.
 
 <table>
