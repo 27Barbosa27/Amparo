@@ -33,15 +33,15 @@ App de lembretes de medicação para cuidadores e para as pessoas de quem cuidam
 
 ## Tecnologia
 
-| Camada | Stack |
-|---|---|
-| App | Flutter |
-| API | Node.js, Express 5, TypeScript, Zod |
-| Base de dados | PostgreSQL, migrações com `node-pg-migrate` |
-| Segurança | Argon2, JWT (`jose`), `helmet`, rate limiting |
-| Testes e CI | Vitest + Supertest (cerca de 250 casos), GitHub Actions |
-| Infraestrutura | Podman, Caddy |
-| Push | Firebase Cloud Messaging |
+| Camada | Linguagem | Framework e ferramentas |
+|---|---|---|
+| App | Dart | Flutter |
+| API | TypeScript | Node.js, Express 5, Zod (validação) |
+| Base de dados | SQL | PostgreSQL, migrações com `node-pg-migrate` |
+| Segurança | | Argon2, JWT (`jose`), `helmet`, rate limiting |
+| Testes e CI | TypeScript | Vitest + Supertest (cerca de 250 casos), GitHub Actions |
+| Infraestrutura | | Podman, Caddy |
+| Push | | Firebase Cloud Messaging |
 
 ## Estado
 
