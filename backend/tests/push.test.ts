@@ -415,3 +415,70 @@ describe('Trabalhos', () => {
     expect(falso.para(p, 'toma_nao_confirmada')).toHaveLength(1);
   });
 });
+
+/** Criar a receita também manda `sync` aos telemóveis: aqui só interessam os lembretes. */
+const lembretes = () => falso.enviadas.filter((e) => e.m.tipo === 'lembrete');
+
+describe('Lembrar a pessoa', () => {
+  it('envia o lembrete só aos telemóveis ligados ao perfil, com ids e sem nomes', async () => {
+    const a = await conta('Ana');
+    const p = await perfil(a);
+    const tel = await ligar(a, p);
+    const tp = tokenFcm('rosa');
+    await registarPush(tel, tp);
+    await registarPush(auth(a), tokenFcm('ana'));
+    const t = await umaToma(a, p, 2 * MIN);
+    const r = await request(app).post(`/tomas/${t.tomaId}/lembrar`).set(auth(a, p));
+    expect(r.status, JSON.stringify(r.body)).toBe(202);
+    expect(lembretes()).toEqual([{ tokens: [tp], m: { tipo: 'lembrete', perfil: p, toma: t.tomaId } }]);
+    const corpo = JSON.stringify(corpoMensagem(tp, lembretes()[0]!.m));
+    expect(corpo).not.toContain('Metformina');
+    expect(corpo).not.toContain('Rosa');
+  });
+
+  it('não insiste: o mesmo cuidador só lembra a mesma toma uma vez em 5 minutos', async () => {
+    const a = await conta('Ana');
+    const p = await perfil(a);
+    await registarPush(await ligar(a, p), tokenFcm('rosa'));
+    const t = await umaToma(a, p, 2 * MIN);
+    expect((await request(app).post(`/tomas/${t.tomaId}/lembrar`).set(auth(a, p))).status).toBe(202);
+    const r = await request(app).post(`/tomas/${t.tomaId}/lembrar`).set(auth(a, p));
+    expect(r.status).toBe(429);
+    expect(r.body.erro).toBe('lembrete_recente');
+    expect(lembretes()).toHaveLength(1);
+  });
+
+  it('sem telemóvel ligado (ou sem push) diz "sem_telemovel" e não envia nada', async () => {
+    const a = await conta('Ana');
+    const p = await perfil(a);
+    await ligar(a, p); // ligado, mas ainda sem token de push
+    const t = await umaToma(a, p, 2 * MIN);
+    const r = await request(app).post(`/tomas/${t.tomaId}/lembrar`).set(auth(a, p));
+    expect(r.status).toBe(409);
+    expect(r.body.erro).toBe('sem_telemovel');
+    expect(lembretes()).toHaveLength(0);
+  });
+
+  it('só um cuidador lembra, e só uma toma ainda por fazer', async () => {
+    const a = await conta('Ana');
+    const p = await perfil(a);
+    const tel = await ligar(a, p);
+    await registarPush(tel, tokenFcm('rosa'));
+    const t = await umaToma(a, p, 2 * MIN);
+    expect((await request(app).post(`/tomas/${t.tomaId}/lembrar`).set(tel)).status).toBe(403);
+    await request(app).post(`/tomas/${t.tomaId}/registo`).set(auth(a, p)).send({});
+    const r = await request(app).post(`/tomas/${t.tomaId}/lembrar`).set(auth(a, p));
+    expect(r.status).toBe(409);
+    expect(r.body.erro).toBe('toma_ja_registada');
+    expect(lembretes()).toHaveLength(0);
+  });
+
+  it('uma toma de outro perfil não se alcança', async () => {
+    const a = await conta('Ana');
+    const b = await conta('Bruno');
+    const pa = await perfil(a);
+    const pb = await perfil(b);
+    const t = await umaToma(a, pa, 2 * MIN);
+    expect((await request(app).post(`/tomas/${t.tomaId}/lembrar`).set(auth(b, pb))).status).toBe(404);
+  });
+});

@@ -12,9 +12,17 @@ class Perfil {
     required this.id,
     required this.nome,
     this.tamanhoTexto = TamanhoTexto.normal,
+    this.alarmesEm = AlarmesEm.pessoa,
+    this.telefone,
   });
 
   final String id;
+
+  /// Onde tocam os alarmes: no telemóvel da pessoa ou no do cuidador ("Eu, no meu telemóvel").
+  final AlarmesEm alarmesEm;
+
+  /// O telemóvel da pessoa, para o botão "Ligar" do cuidador. Opcional.
+  final String? telefone;
 
   /// A definição de texto escolhida para a pessoa (o modo simples aplica-a).
   final TamanhoTexto tamanhoTexto;
@@ -28,6 +36,17 @@ class Perfil {
     id: id,
     nome: nome,
     tamanhoTexto: tamanhoTexto ?? this.tamanhoTexto,
+    alarmesEm: alarmesEm,
+    telefone: telefone,
+  );
+
+  /// O mesmo perfil com outro telefone (nulo apaga-o).
+  Perfil comTelefone(String? novo) => Perfil(
+    id: id,
+    nome: nome,
+    tamanhoTexto: tamanhoTexto,
+    alarmesEm: alarmesEm,
+    telefone: novo,
   );
 }
 
@@ -234,7 +253,60 @@ int? percentagemAdesao(List<DiaAdesao> dias) {
 // ---------- Pessoas e receitas novas ----------
 
 /// Quem recebe os alarmes: a própria pessoa (liga o telemóvel com um código) ou o cuidador.
-enum AlarmesEm { pessoa, cuidador }
+enum AlarmesEm {
+  pessoa,
+  cuidador;
+
+  /// O valor que a API usa ('dispositivo_da_pessoa', 'dispositivo_do_cuidador').
+  static AlarmesEm daApi(Object? v) =>
+      v == 'dispositivo_do_cuidador' ? AlarmesEm.cuidador : AlarmesEm.pessoa;
+}
+
+/// Um telemóvel ligado a uma pessoa por código ("Telemóveis ligados"). O número de alarmes e as permissões
+/// são o que o próprio telemóvel reportou da última vez que falou com o servidor (nulos se nunca reportou).
+class Dispositivo {
+  const Dispositivo({
+    required this.id,
+    required this.ligadoDesde,
+    this.nome,
+    this.ultimaLigacao,
+    this.alarmesAgendados,
+    this.permissoes,
+  });
+  final String id;
+  final String? nome;
+  final DateTime ligadoDesde;
+  final DateTime? ultimaLigacao;
+  final int? alarmesAgendados;
+  final PermissoesAlarme? permissoes;
+}
+
+/// As três permissões de "Alarmes fiáveis" (docs/plano.md secção 3.3).
+class PermissoesAlarme {
+  const PermissoesAlarme({
+    required this.alarmesExatos,
+    required this.bateriaSemLimites,
+    required this.ecraBloqueado,
+  });
+
+  /// Tocam à hora certa (alarmes exatos e notificações autorizadas).
+  final bool alarmesExatos;
+
+  /// O telemóvel não adormece a app.
+  final bool bateriaSemLimites;
+
+  /// O alarme aparece por cima do ecrã bloqueado.
+  final bool ecraBloqueado;
+
+  static const todas = PermissoesAlarme(
+    alarmesExatos: true,
+    bateriaSemLimites: true,
+    ecraBloqueado: true,
+  );
+
+  int get emFalta =>
+      [alarmesExatos, bateriaSemLimites, ecraBloqueado].where((v) => !v).length;
+}
 
 enum TamanhoTexto {
   normal(1),
@@ -296,11 +368,19 @@ class NovaPessoa {
     required this.nome,
     required this.alarmesEm,
     required this.tamanhoTexto,
+    this.telefone,
   });
   final String nome;
   final AlarmesEm alarmesEm;
   final TamanhoTexto tamanhoTexto;
+
+  /// Opcional: para o botão "Ligar" do cuidador.
+  final String? telefone;
 }
+
+/// O formato de telefone que a API aceita (o mesmo do servidor): 9 a 18 algarismos e espaços, com "+" opcional.
+bool telefoneValido(String v) =>
+    RegExp(r'^\+?[0-9 ]{9,18}$').hasMatch(v.trim());
 
 /// O que se toma: não é só comprimidos. A dose começa na unidade do tipo ("1 comprimido", "5 ml"...).
 enum TipoMedicacao {

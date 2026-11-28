@@ -15,12 +15,15 @@ import { alterarPerfil, apagarPerfil, criarPerfil, listarPerfis, obterPerfil } f
 
 const tamanhoTexto = z.enum(['normal', 'grande', 'muito_grande']);
 const alarmesEm = z.enum(['dispositivo_da_pessoa', 'dispositivo_do_cuidador']);
+/** O mesmo formato do telefone do cuidador (`PATCH /auth/me`). */
+const telefone = z.string().trim().regex(/^\+?[0-9 ]{9,18}$/).nullable();
 
 const novoPerfilSchema = z.object({
   pseudonimo: z.string().trim().min(1).max(40),
   timezone: timezoneSchema.default('Europe/Lisbon'),
   tamanhoTexto: tamanhoTexto.default('grande'),
   alarmesEm: alarmesEm.default('dispositivo_da_pessoa'),
+  telefone: telefone.optional(),
   /** O cuidador declara que tem a autorização da pessoa ou do seu representante legal. */
   autorizacaoDeclarada: z.literal(true),
   autorizacaoVersao: z.string().min(1).max(20).default(VERSAO_CONSENTIMENTO_ATUAL),
@@ -32,6 +35,7 @@ const alteracaoSchema = z
     timezone: timezoneSchema,
     tamanhoTexto,
     alarmesEm,
+    telefone,
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, 'nada para alterar');
@@ -39,16 +43,18 @@ const alteracaoSchema = z
 /** `/profiles`: gestão dos perfis a que o utilizador tem acesso. */
 export function rotasPerfis(db: Db, config: Config, eventos: Eventos): Router {
   const chaveMestra = lerChave(config.PROFILE_MASTER_KEY);
+  const chaveCampos = lerChave(config.EMAIL_ENC_KEY);
+  const chaves = { mestra: chaveMestra, campos: chaveCampos };
   const router = Router();
   router.use(exigirAutenticacao(config.JWT_SECRET));
 
   router.get('/', async (req, res) => {
-    res.json({ perfis: await listarPerfis(db, req.userId!) });
+    res.json({ perfis: await listarPerfis(db, req.userId!, chaveCampos) });
   });
 
   router.post('/', async (req, res) => {
     const d = novoPerfilSchema.parse(req.body);
-    const perfil = await criarPerfil(db, req.userId!, d, chaveMestra, req.ip);
+    const perfil = await criarPerfil(db, req.userId!, d, chaves, req.ip);
     res.status(201).json({ perfil });
   });
 
@@ -60,18 +66,18 @@ export function rotasPerfis(db: Db, config: Config, eventos: Eventos): Router {
   porPerfil.use(rotasDispositivosDoPerfil(db, config));
 
   porPerfil.get('/', async (req, res) => {
-    const perfil = await obterPerfil(db, req.userId!, req.perfil!.id);
+    const perfil = await obterPerfil(db, req.userId!, req.perfil!.id, chaveCampos);
     if (!perfil) throw new ErroPerfil('perfil_nao_encontrado', 404);
     res.json({ perfil });
   });
 
   porPerfil.get('/exportacao', exigirPapel('owner'), async (req, res) => {
-    res.json(await exportarPerfil(db, chaveMestra, req.perfil!.id, req.userId!, req.ip));
+    res.json(await exportarPerfil(db, chaves, req.perfil!.id, req.userId!, req.ip));
   });
 
   porPerfil.patch('/', exigirPapel('owner'), async (req, res) => {
     const a = alteracaoSchema.parse(req.body);
-    const perfil = await alterarPerfil(db, req.userId!, req.perfil!.id, a, req.ip);
+    const perfil = await alterarPerfil(db, req.userId!, req.perfil!.id, a, chaveCampos, req.ip);
     res.json({ perfil });
   });
 
@@ -85,9 +91,10 @@ export function rotasPerfis(db: Db, config: Config, eventos: Eventos): Router {
 
 /** `GET /perfil-ativo`: o perfil indicado no cabeçalho `X-Profile-Id`, se o utilizador tiver acesso. */
 export function rotaPerfilAtivo(db: Db, config: Config): Router {
+  const chaveCampos = lerChave(config.EMAIL_ENC_KEY);
   const router = Router();
   router.get('/', exigirAutenticacao(config.JWT_SECRET), acessoPorCabecalho(db), async (req, res) => {
-    const perfil = await obterPerfil(db, req.userId!, req.perfil!.id);
+    const perfil = await obterPerfil(db, req.userId!, req.perfil!.id, chaveCampos);
     if (!perfil) throw new ErroPerfil('perfil_nao_encontrado', 404);
     res.json({ perfil });
   });

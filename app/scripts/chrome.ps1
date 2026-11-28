@@ -13,7 +13,13 @@
 # com a app fechada: para isso usa o telemóvel virtual (scripts\emulador.ps1) ou um telemóvel a sério.
 param([string]$Tela = '', [int]$Porta = 8099, [string]$Api = '', [switch]$Parar)
 
-$flutter = 'D:\flutter\bin\flutter.bat'
+# O Flutter de cada máquina: o que está no PATH, senão os sítios habituais de quem trabalha no projeto.
+$flutter = (Get-Command flutter.bat -ErrorAction SilentlyContinue).Source
+if (-not $flutter) {
+    $flutter = @("$env:USERPROFILE\flutter\bin\flutter.bat", 'D:\flutter\bin\flutter.bat', 'C:\flutter\bin\flutter.bat') |
+        Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $flutter) { throw 'Não encontrei o Flutter: ponha a pasta flutter\bin no PATH.' }
 $projeto = Split-Path -Parent $PSScriptRoot
 
 function Parar-Tudo {

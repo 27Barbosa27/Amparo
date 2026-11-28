@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import type { Config } from '../config.js';
@@ -127,7 +127,16 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
   });
 
   const verificador =
-    opcoes.verificadorExterno ?? criarVerificadorExterno({ appleClientId: config.APPLE_CLIENT_ID, googleClientIds: config.GOOGLE_CLIENT_IDS });
+    opcoes.verificadorExterno ?? criarVerificadorExterno({ appleClientIds: config.APPLE_CLIENT_ID, googleClientIds: config.GOOGLE_CLIENT_IDS });
+  // No Android, "Entrar com a Apple" abre uma página da Apple que no fim faz POST do formulário para aqui. O servidor
+  // devolve-o à app por um intent (é o que o plugin sign_in_with_apple espera). Nada se guarda nem se valida aqui:
+  // a app recebe o ID token e envia-o depois para `/auth/apple`, que o valida.
+  router.post('/apple/callback', express.urlencoded({ extended: false, limit: '16kb' }), (req, res) => {
+    const campos = new URLSearchParams();
+    for (const [k, v] of Object.entries(req.body ?? {})) if (typeof v === 'string') campos.set(k, v);
+    res.redirect(303, `intent://callback?${campos}#Intent;package=${config.APP_ANDROID_PACKAGE};scheme=signinwithapple;end`);
+  });
+
   for (const provedor of ['apple', 'google'] as Provedor[]) {
     router.post(`/${provedor}`, async (req, res) => {
       const d = externoSchema.parse(req.body);
@@ -173,7 +182,8 @@ export function rotasAuth(db: Db, config: Config, opcoes: OpcoesAuth = {}): Rout
     const perfil = req.userId ? await perfilDoUtilizador(db, req.userId) : null;
     if (!perfil) throw new ErroAuth('nao_autenticado', 401);
     const telefone = await telefoneDoUtilizador(db, perfil.id, segredos.emailChave);
-    res.json({ utilizador: { id: perfil.id, nome: perfil.nome, criadoEm: perfil.criadoEm, telefone } });
+    // `temSenha`: ao apagar a conta, a app pede a palavra-passe ou (só Apple/Google) a confirmação explícita.
+    res.json({ utilizador: { id: perfil.id, nome: perfil.nome, criadoEm: perfil.criadoEm, telefone, temSenha: perfil.temSenha } });
   });
 
   router.get('/me/exportacao', exigirAutenticacao(config.JWT_SECRET), async (req, res) => {

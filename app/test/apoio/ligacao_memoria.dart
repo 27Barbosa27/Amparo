@@ -16,6 +16,9 @@ class LigacaoMemoria implements LigacaoDispositivo {
   @override
   Repositorio? get repositorio => _repo;
 
+  /// O repositório do telemóvel da pessoa (para ver o que ele enviou ao servidor).
+  RepositorioMemoria? get repoDoTelemovel => _repo;
+
   @override
   Future<({Perfil? perfil, String? erro})> ligar(String codigo) async {
     tentativas++;

@@ -1,3 +1,4 @@
+import 'package:amparo/dados/api.dart';
 import 'package:amparo/dados/corpo_receita.dart';
 import 'package:amparo/dados/repositorio.dart';
 import 'package:amparo/dominio/modelos.dart';
@@ -51,8 +52,9 @@ class RepositorioMemoria implements Repositorio {
   final bool _vazio;
   final Map<String, List<Toma>> _tomas = {};
 
+  /// A Maria tem número (para o botão "Ligar"); o Manuel não.
   static const _perfis = [
-    Perfil(id: 'maria', nome: 'Maria'),
+    Perfil(id: 'maria', nome: 'Maria', telefone: '912 345 678'),
     Perfil(id: 'manuel', nome: 'Manuel'),
   ];
 
@@ -248,6 +250,8 @@ class RepositorioMemoria implements Repositorio {
       id: 'novo${++_seq}',
       nome: pessoa.nome.trim(),
       tamanhoTexto: pessoa.tamanhoTexto,
+      alarmesEm: pessoa.alarmesEm,
+      telefone: pessoa.telefone,
     );
     _perfisExtra.add(p);
     _tomas[p.id] = [];
@@ -381,4 +385,60 @@ class RepositorioMemoria implements Repositorio {
     fase: FaseGeracao.concluida,
     tomasGeradas: _geradas[receitaId] ?? 0,
   );
+
+  // ---- telefone, telemóveis ligados, lembretes e push ----
+
+  @override
+  Future<Perfil> atualizarTelefone(String perfilId, String? telefone) async {
+    final atual = (await perfis()).firstWhere((p) => p.id == perfilId);
+    final novo = atual.comTelefone(
+      telefone == null || telefone.trim().isEmpty ? null : telefone.trim(),
+    );
+    _alteracoes[perfilId] = novo;
+    return novo;
+  }
+
+  final Map<String, List<Dispositivo>> telemoveis = {};
+  final desligados = <String>[];
+
+  @override
+  Future<List<Dispositivo>> dispositivos(String perfilId) async =>
+      List.of(telemoveis[perfilId] ?? const []);
+
+  @override
+  Future<void> desligarDispositivo(
+    String perfilId,
+    String dispositivoId,
+  ) async {
+    desligados.add(dispositivoId);
+    telemoveis[perfilId]?.removeWhere((d) => d.id == dispositivoId);
+  }
+
+  /// O código de erro que [lembrar] lança (nulo: o lembrete segue).
+  String? erroDoLembrete;
+  final lembretes = <String>[];
+
+  @override
+  Future<void> lembrar(String perfilId, String tomaId) async {
+    if (erroDoLembrete != null) throw ErroApi(erroDoLembrete!, 409);
+    lembretes.add(tomaId);
+  }
+
+  final estadosDeAlarmes = <({int agendados, PermissoesAlarme permissoes})>[];
+
+  @override
+  Future<void> enviarEstadoAlarmes(
+    int agendados,
+    PermissoesAlarme permissoes,
+  ) async =>
+      estadosDeAlarmes.add((agendados: agendados, permissoes: permissoes));
+
+  final tokensPush = <String>[];
+
+  @override
+  Future<void> registarPush(String plataforma, String token) async =>
+      tokensPush.add(token);
+
+  @override
+  Future<void> removerPush(String token) async => tokensPush.remove(token);
 }

@@ -21,7 +21,7 @@ export interface VerificadorExterno {
 }
 
 export interface ConfigExterna {
-  appleClientId?: string;
+  appleClientIds?: string[];
   googleClientIds?: string[];
 }
 
@@ -49,7 +49,7 @@ export function criarVerificadorExterno(cfg: ConfigExterna, chaves: Partial<Reco
   const chaveDe = (p: Provedor) => chaves[p] ?? (remotas[p] ??= createRemoteJWKSet(new URL(JWKS_URL[p])));
   return {
     async verificar(provedor, idToken, nonce) {
-      const audiencias = provedor === 'apple' ? (cfg.appleClientId ? [cfg.appleClientId] : []) : (cfg.googleClientIds ?? []);
+      const audiencias = provedor === 'apple' ? (cfg.appleClientIds ?? []) : (cfg.googleClientIds ?? []);
       if (audiencias.length === 0) throw new ErroAuth('provedor_nao_configurado', 501);
       try {
         const { payload } = await jwtVerify(idToken, chaveDe(provedor), {

@@ -4,11 +4,15 @@ import 'dart:ui';
 
 import 'package:material_ui/material_ui.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import 'dados/alarmes.dart';
 import 'dados/api.dart';
+import 'dados/apple.dart';
 import 'dados/autenticacao.dart';
 import 'dados/google.dart';
 import 'dados/ligacao.dart';
+import 'dados/push.dart';
 import 'dados/repositorio.dart';
 import 'dominio/modelos.dart';
 import 'estado/hoje_controlador.dart';
@@ -22,7 +26,9 @@ import 'ui/componentes/resultado.dart';
 import 'ui/componentes/icones.dart';
 import 'ui/componentes/ilha_navegacao.dart';
 import 'ui/ecras/adicionar_pessoa.dart';
+import 'ui/ecras/alarmes.dart';
 import 'ui/ecras/alertas_cuidador.dart';
+import 'ui/ecras/conta.dart';
 import 'ui/ecras/criar_conta.dart';
 import 'ui/ecras/cuidador_hoje.dart';
 import 'ui/ecras/entrar.dart';
@@ -36,6 +42,7 @@ import 'ui/ecras/verificar_email.dart';
 import 'ui/ecras/som_alarme.dart';
 import 'ui/ecras/sucesso_marcada.dart';
 import 'ui/ecras/tamanho_texto.dart';
+import 'ui/ecras/telemoveis.dart';
 
 /// A raiz da app. Recebe o repositório (dados falsos por agora, a API depois) e o relógio (para os testes).
 class AmparoApp extends StatefulWidget {
@@ -49,11 +56,23 @@ class AmparoApp extends StatefulWidget {
     this.credenciaisDev,
     this.ligacao,
     this.google,
+    this.apple,
     this.alarmes = const ServicoAlarmesNulo(),
+    this.push = const ServicoPushNulo(),
+    this.guardarFicheiro = guardarComSeletor,
   });
 
   /// "Entrar com a Google". Nulo: o botão avisa que ainda não está disponível.
   final EntradaGoogle? google;
+
+  /// "Entrar com a Apple". Nulo (ou por configurar): o botão avisa que ainda não está disponível.
+  final EntradaApple? apple;
+
+  /// Push (FCM): alertas ao cuidador, `sync` e lembretes no telemóvel da pessoa. Nulo no Chrome e nos testes.
+  final ServicoPush push;
+
+  /// "Exportar os meus dados": onde se guarda o ficheiro (nos testes, em memória).
+  final GuardarFicheiro guardarFicheiro;
 
   /// O telemóvel de uma pessoa acompanhada (liga-se com um código, sem conta). Nulo: não se oferece.
   final LigacaoDispositivo? ligacao;
@@ -102,10 +121,53 @@ class _AmparoAppState extends State<AmparoApp> {
     super.initState();
     // No browser a credencial chega pelo botão do próprio Google.
     _googleEventos = widget.google?.eventos.listen(_credencialGoogle);
+    _respostasAlarme = widget.alarmes.respostas.listen(_aoResponderAlarme);
+    _mensagensPush = widget.push.mensagens.listen(_aoReceberPush);
     _arrancar();
   }
 
   StreamSubscription<CredencialGoogle>? _googleEventos;
+  StreamSubscription<RespostaAlarme>? _respostasAlarme;
+  StreamSubscription<MensagemPush>? _mensagensPush;
+
+  /// Quantas permissões de "Alarmes fiáveis" faltam neste telemóvel (nulo se aqui não há alarmes).
+  int? _alarmesEmFalta;
+
+  Future<void> _lerPermissoesAlarme() async {
+    if (!widget.alarmes.suportado) return;
+    final p = await widget.alarmes.permissoes();
+    if (mounted) setState(() => _alarmesEmFalta = p.emFalta);
+  }
+
+  /// "Entrar com a Apple": a folha do sistema (iPhone) ou a página da Apple (Android).
+  Future<void> _entrarComApple(BuildContext context) async {
+    final apple = widget.apple;
+    if (apple == null || !apple.configurado) {
+      _aviso(
+        context,
+        'Entrar com a Apple ainda não está configurado neste telemóvel.',
+      );
+      return;
+    }
+    final r = await apple.entrar();
+    final c = r.credencial;
+    if (c != null) {
+      await _credencialExterna(
+        (aceita) => widget.autenticacao.entrarComApple(
+          c.idToken,
+          c.nonce,
+          nome: c.nome,
+          aceitaTermos: aceita,
+        ),
+        'Apple',
+      );
+    } else if (r.erro != null && r.erro != 'cancelado') {
+      final ctx = _navegador.currentContext;
+      if (ctx != null && ctx.mounted) {
+        _aviso(ctx, _mensagemExterna(r.erro!, 'Apple'));
+      }
+    }
+  }
 
   /// Nos telemóveis: abre a folha de contas da Google e entra com o que ela devolver.
   Future<void> _entrarComGoogle(BuildContext context) async {
@@ -122,40 +184,50 @@ class _AmparoAppState extends State<AmparoApp> {
       await _credencialGoogle(r.credencial!);
     } else if (r.erro != null && r.erro != 'cancelado') {
       final ctx = _navegador.currentContext;
-      if (ctx != null && ctx.mounted) _aviso(ctx, _mensagemGoogle(r.erro!));
+      if (ctx != null && ctx.mounted) {
+        _aviso(ctx, _mensagemExterna(r.erro!, 'Google'));
+      }
     }
   }
 
-  static String _mensagemGoogle(String codigo) => switch (codigo) {
-    'sem_rede' =>
-      'Sem ligação à internet. Verifique a ligação e tente outra vez.',
-    'demasiadas_tentativas' =>
-      'Demasiadas tentativas. Espere um pouco e tente outra vez.',
-    'provedor_nao_configurado' =>
-      'A entrada com a Google ainda não está ligada no servidor.',
-    'google_indisponivel' =>
-      'A entrada com a Google não está disponível neste dispositivo.',
-    _ => 'Não foi possível entrar com a Google. Tente outra vez.',
-  };
+  static String _mensagemExterna(String codigo, String quem) =>
+      switch (codigo) {
+        'sem_rede' =>
+          'Sem ligação à internet. Verifique a ligação e tente outra vez.',
+        'demasiadas_tentativas' =>
+          'Demasiadas tentativas. Espere um pouco e tente outra vez.',
+        'provedor_nao_configurado' =>
+          'A entrada com a $quem ainda não está ligada no servidor.',
+        'google_indisponivel' || 'apple_indisponivel' =>
+          'A entrada com a $quem não está disponível neste dispositivo.',
+        _ => 'Não foi possível entrar com a $quem. Tente outra vez.',
+      };
 
-  /// Entra no servidor com o ID token. Numa conta nova pede primeiro o consentimento (dados de saúde).
-  Future<void> _credencialGoogle(
-    CredencialGoogle c, {
-    bool aceitaTermos = false,
-  }) async {
-    final erro = await widget.autenticacao.entrarComGoogle(
+  Future<void> _credencialGoogle(CredencialGoogle c) => _credencialExterna(
+    (aceita) => widget.autenticacao.entrarComGoogle(
       c.idToken,
       c.nonce,
       nome: c.nome,
-      aceitaTermos: aceitaTermos,
-    );
+      aceitaTermos: aceita,
+    ),
+    'Google',
+  );
+
+  /// Entra no servidor com o ID token (Google ou Apple). Numa conta nova pede primeiro o consentimento
+  /// (dados de saúde) e repete com ele.
+  Future<void> _credencialExterna(
+    Future<String?> Function(bool aceitaTermos) entrar,
+    String quem, {
+    bool aceitaTermos = false,
+  }) async {
+    final erro = await entrar(aceitaTermos);
     final ctx = _navegador.currentContext;
     if (!mounted || ctx == null || !ctx.mounted) return;
     if (erro == 'consentimento_necessario') {
       final aceite = await showDialog<bool>(
         context: ctx,
         builder: (d) => AlertDialog(
-          title: const Text('Criar conta com a Google'),
+          title: Text('Criar conta com a $quem'),
           content: const Text(
             'Ainda não existe uma conta Amparo para este email. Para a criar, tem de aceitar os Termos, a Política de Privacidade e o tratamento dos dados de saúde para gerir as tomas.',
           ),
@@ -171,17 +243,19 @@ class _AmparoAppState extends State<AmparoApp> {
           ],
         ),
       );
-      if (aceite == true) await _credencialGoogle(c, aceitaTermos: true);
+      if (aceite == true) {
+        await _credencialExterna(entrar, quem, aceitaTermos: true);
+      }
       return;
     }
     if (erro != null) {
-      _aviso(ctx, _mensagemGoogle(erro));
+      _aviso(ctx, _mensagemExterna(erro, quem));
       return;
     }
     try {
       await _abrirSessao();
     } on ErroApi catch (e) {
-      if (ctx.mounted) _aviso(ctx, _mensagemGoogle(e.codigo));
+      if (ctx.mounted) _aviso(ctx, _mensagemExterna(e.codigo, quem));
       return;
     }
     _navegador.currentState?.popUntil((r) => r.isFirst);
@@ -227,6 +301,11 @@ class _AmparoAppState extends State<AmparoApp> {
       _modo = _Modo.entrar;
     }
     if (mounted) setState(() {});
+    // Foi um alarme (ou uma notificação) que abriu a app: mostra-o depois de a sessão estar aberta.
+    final alarme = await widget.alarmes.respostaDoArranque();
+    if (alarme != null) await _aoResponderAlarme(alarme);
+    final push = await widget.push.mensagemDoArranque();
+    if (push != null) await _aoReceberPush(push);
   }
 
   Future<void> _ecraDeDesenvolvimento() async {
@@ -292,19 +371,34 @@ class _AmparoAppState extends State<AmparoApp> {
   int _separador = 0;
 
   void _abrirDispositivo(Perfil perfil) {
+    final repositorio = widget.ligacao!.repositorio!;
     _controlador?.dispose();
     _controlador = HojeControlador(
-      repositorio: widget.ligacao!.repositorio!,
+      repositorio: repositorio,
       perfil: perfil,
       relogio: widget.relogio,
       aoSessaoExpirada: _desligarDispositivo,
       alarmes: widget.alarmes,
+      // O cuidador vê em "Telemóveis ligados" quantos alarmes há aqui e se faltam permissões.
+      aposCarregar: () => _enviarEstadoAlarmes(repositorio),
     )..carregar();
     _modo = _Modo.dispositivo;
+    widget.push.iniciar(repositorio);
+  }
+
+  Future<void> _enviarEstadoAlarmes(Repositorio repositorio) async {
+    if (!widget.alarmes.suportado) return;
+    await repositorio.enviarEstadoAlarmes(
+      await widget.alarmes.agendados(),
+      await widget.alarmes.permissoes(),
+    );
   }
 
   /// O cuidador desligou este telemóvel (ou o token deixou de valer): volta ao início.
   Future<void> _desligarDispositivo() async {
+    final repositorio = widget.ligacao?.repositorio;
+    if (repositorio != null) await widget.push.parar(repositorio);
+    await widget.alarmes.cancelarTodos();
     await widget.ligacao?.desligar();
     _voltarAEntrar();
   }
@@ -329,8 +423,18 @@ class _AmparoAppState extends State<AmparoApp> {
               rotaPagina<void>(
                 SucessoPessoaLigadoEcra(
                   pessoa: pessoa,
-                  aoContinuar: () =>
-                      _navegador.currentState?.popUntil((r) => r.isFirst),
+                  aoContinuar: () {
+                    final nav = _navegador.currentState;
+                    nav?.popUntil((r) => r.isFirst);
+                    // Os alarmes tocam aqui: é o momento de pedir as permissões, uma vez (com "Mais tarde").
+                    if (widget.alarmes.suportado) {
+                      nav?.push(
+                        rotaPagina<void>(
+                          AlarmesFiaveisEcra(alarmes: widget.alarmes),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ),
             );
@@ -369,11 +473,7 @@ class _AmparoAppState extends State<AmparoApp> {
                 perfil.id,
                 tamanho,
               );
-              _perfis = [
-                for (final p in _perfis)
-                  p.id == atualizado.id ? atualizado : p,
-              ];
-              _abrirPerfil(atualizado);
+              _perfilAtualizado(atualizado);
               return null;
             } on ErroApi catch (e) {
               return e.codigo;
@@ -412,9 +512,14 @@ class _AmparoAppState extends State<AmparoApp> {
       _modo = _Modo.cuidador;
     }
     if (mounted) setState(() {});
+    widget.push.iniciar(widget.repositorio);
+    _lerPermissoesAlarme();
   }
 
   Future<void> _terminarSessao() async {
+    // O token de push apaga-se antes de sair: o pedido ainda precisa da sessão.
+    await widget.push.parar(widget.repositorio);
+    await widget.alarmes.cancelarTodos();
     await widget.autenticacao.sair();
     _voltarAEntrar();
   }
@@ -443,8 +548,253 @@ class _AmparoAppState extends State<AmparoApp> {
       cuidador: widget.autenticacao.nome,
       aoSessaoExpirada: _voltarAEntrar,
       alarmes: widget.alarmes,
+      // Os alarmes de quem recebe os alarmes no próprio telemóvel ("Eu, no meu telemóvel") tocam aqui; os
+      // das outras pessoas tocam no telemóvel delas.
+      agendarAlarmes: p.alarmesEm == AlarmesEm.cuidador,
     )..carregar();
     setState(() {});
+  }
+
+  /// O perfil mudou no servidor (tamanho do texto, número): atualiza a lista e reabre-o.
+  void _perfilAtualizado(Perfil atualizado) {
+    _perfis = [for (final p in _perfis) p.id == atualizado.id ? atualizado : p];
+    _abrirPerfil(atualizado);
+  }
+
+  /// O controlador das tomas da pessoa deste alarme: o aberto, ou (no cuidador) abre essa pessoa.
+  HojeControlador? _controladorDe(String perfilId) {
+    final c = _controlador;
+    if (c != null && c.perfil.id == perfilId) return c;
+    if (_modo != _Modo.cuidador && _modo != _Modo.sucesso) return null;
+    final p = _perfis.where((x) => x.id == perfilId).firstOrNull;
+    if (p == null) return null;
+    _abrirPerfil(p);
+    _modo = _Modo.cuidador;
+    _separador = 0;
+    return _controlador;
+  }
+
+  /// Regista a toma a partir do alarme. Devolve a mensagem de erro, ou nulo se ficou registada.
+  Future<String?> _registarDoAlarme(HojeControlador c, AlarmeToma a) async {
+    var toma = c.tomas.where((t) => t.id == a.tomaId).firstOrNull;
+    if (toma == null) {
+      await c.carregar();
+      toma = c.tomas.where((t) => t.id == a.tomaId).firstOrNull;
+    }
+    if (toma == null) return 'Esta toma já não está na lista de hoje.';
+    if (toma.estado != EstadoToma.pendente) return null; // já estava registada
+    if (await c.marcarTomada(toma)) return null;
+    return c.erro == 'sem_rede'
+        ? 'Sem ligação à internet. A toma ainda não ficou registada: tente outra vez.'
+        : 'Não foi possível registar a toma. Tente outra vez.';
+  }
+
+  /// Um toque numa notificação: o alarme (ecrã inteiro), "Tomei" ou um aviso ao cuidador.
+  Future<void> _aoResponderAlarme(RespostaAlarme r) async {
+    final alarme = r.alarme;
+    if (r.acao == AcaoAlarme.aviso || alarme == null) {
+      await widget.alarmes.mostrarSobreBloqueio(false);
+      final id = r.perfilId;
+      if (id != null && _controladorDe(id) != null && mounted) setState(() {});
+      return;
+    }
+    final c = _controladorDe(alarme.perfilId);
+    if (mounted) setState(() {});
+    if (c == null) {
+      await widget.alarmes.mostrarSobreBloqueio(false);
+      return;
+    }
+    if (r.acao == AcaoAlarme.tomei) {
+      final erro = await _registarDoAlarme(c, alarme);
+      await widget.alarmes.mostrarSobreBloqueio(false);
+      final ctx = _navegador.currentContext;
+      if (ctx != null && ctx.mounted) {
+        _aviso(ctx, erro ?? '${alarme.medicamento} marcada como tomada.');
+      }
+      return;
+    }
+    await _abrirAlarme(c, alarme);
+  }
+
+  String? _alarmeAberto;
+
+  Future<void> _abrirAlarme(HojeControlador c, AlarmeToma alarme) async {
+    final nav = _navegador.currentState;
+    if (nav == null || _alarmeAberto == alarme.tomaId) return;
+    _alarmeAberto = alarme.tomaId;
+    await nav.push(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (_, _, _) => Scaffold(
+          body: AlarmeEcra(
+            alarme: alarme,
+            aoTomei: () => _registarDoAlarme(c, alarme),
+            aoAdiar: () => widget.alarmes.adiar(alarme),
+          ),
+        ),
+        transitionsBuilder: (_, animacao, _, filho) =>
+            FadeTransition(opacity: animacao, child: filho),
+      ),
+    );
+    _alarmeAberto = null;
+    // Fora do alarme, a app volta a precisar de desbloquear o telemóvel.
+    await widget.alarmes.mostrarSobreBloqueio(false);
+  }
+
+  /// O que chega pelo push. Nunca traz nomes nem nada clínico: o detalhe vem do servidor ou já está aqui.
+  Future<void> _aoReceberPush(MensagemPush m) async {
+    switch (m.tipo) {
+      case 'sync':
+        final c = _controlador;
+        if (c != null && c.perfil.id == m.perfil) await c.carregar();
+      case 'lembrete':
+        // Só no telemóvel da pessoa: "Lembrar a Rosa" volta a mostrar o alarme dessa toma.
+        final c = _controlador;
+        if (_modo != _Modo.dispositivo ||
+            c == null ||
+            c.perfil.id != m.perfil) {
+          return;
+        }
+        await c.carregar();
+        final t = c.tomas.where((x) => x.id == m.toma).firstOrNull;
+        if (t != null && t.estado == EstadoToma.pendente) {
+          await _abrirAlarme(c, AlarmeToma.daToma(c.perfil.id, t));
+        }
+      case 'alerta':
+        final p = _perfis.where((x) => x.id == m.perfil).firstOrNull;
+        if (p == null) return;
+        final c = _controlador;
+        if (m.tocada) {
+          _controladorDe(p.id);
+          if (mounted) setState(() {});
+        } else {
+          if (c != null && c.perfil.id == p.id) c.carregar();
+          final texto = textoDoAlerta(m.subtipo, p.nome);
+          if (widget.alarmes.suportado) {
+            await widget.alarmes.mostrarAviso(p.id, texto);
+          } else {
+            final ctx = _navegador.currentContext;
+            if (ctx != null && ctx.mounted) _aviso(ctx, texto);
+          }
+        }
+    }
+  }
+
+  /// "Lembrar a Rosa": o telemóvel dela volta a mostrar o alarme desta toma.
+  Future<void> _lembrar(BuildContext context, Toma toma) async {
+    final p = _controlador!.perfil;
+    try {
+      await widget.repositorio.lembrar(p.id, toma.id);
+      if (context.mounted) {
+        _aviso(context, 'Enviámos um lembrete para o telemóvel de ${p.nome}.');
+      }
+    } on ErroApi catch (e) {
+      if (!context.mounted) return;
+      _aviso(context, switch (e.codigo) {
+        'sem_telemovel' =>
+          'O telemóvel de ${p.nome} ainda não está ligado ou não recebe notificações.',
+        'lembrete_recente' =>
+          'Já lembrou ${p.nome} há pouco. Espere uns minutos.',
+        'toma_ja_registada' => 'Esta toma já foi registada.',
+        'sem_rede' =>
+          'Sem ligação à internet. Verifique a ligação e tente outra vez.',
+        _ => 'Não foi possível enviar o lembrete. Tente outra vez.',
+      });
+    }
+  }
+
+  /// "Ligar à Rosa": abre o marcador do telemóvel com o número dela.
+  Future<void> _ligar(BuildContext context, String numero) async {
+    final ok = await launchUrl(
+      Uri(scheme: 'tel', path: numero.replaceAll(' ', '')),
+    );
+    if (!ok && context.mounted) {
+      _aviso(context, 'Este aparelho não consegue fazer chamadas.');
+    }
+  }
+
+  void _numeroPessoa(BuildContext context) {
+    final perfil = _controlador!.perfil;
+    Navigator.of(context).push(
+      rotaPagina<void>(
+        TelefonePessoaEcra(
+          perfil: perfil,
+          aoGuardar: (telefone) async {
+            try {
+              _perfilAtualizado(
+                await widget.repositorio.atualizarTelefone(perfil.id, telefone),
+              );
+              return null;
+            } on ErroApi catch (e) {
+              return e.codigo;
+            } catch (_) {
+              return 'falha_ao_guardar';
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  void _telemoveis(BuildContext context) {
+    final perfil = _controlador!.perfil;
+    Navigator.of(context).push(
+      rotaPagina<void>(
+        Builder(
+          builder: (ctx) => DispositivosEcra(
+            repositorio: widget.repositorio,
+            perfil: perfil,
+            relogio: widget.relogio,
+            aoLigarOutro: () => _ligarTelemovel(ctx, perfil),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _alarmesFiaveis(BuildContext context) {
+    Navigator.of(context).push(
+      rotaPagina<void>(
+        AlarmesFiaveisEcra(
+          alarmes: widget.alarmes,
+          aoMudar: (p) => setState(() => _alarmesEmFalta = p.emFalta),
+        ),
+      ),
+    );
+  }
+
+  void _conta(BuildContext context) {
+    Navigator.of(context).push(
+      rotaPagina<void>(
+        ContaEcra(
+          autenticacao: widget.autenticacao,
+          guardar: widget.guardarFicheiro,
+          relogio: widget.relogio,
+          aoApagar: (ctx, conta) => Navigator.of(ctx).push(
+            rotaPagina<void>(
+              ApagarContaEcra(
+                nome: widget.autenticacao.nome ?? '',
+                temSenha: conta.temSenha,
+                aoApagar: _apagarConta,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _apagarConta(String? senha) async {
+    final erro = await widget.autenticacao.apagarConta(senha: senha);
+    if (erro != null) return erro;
+    // A conta (e os tokens de push dela) já não existe: só falta limpar este telemóvel.
+    await widget.push.parar(widget.repositorio);
+    await widget.alarmes.cancelarTodos();
+    _navegador.currentState?.popUntil((r) => r.isFirst);
+    _voltarAEntrar();
+    final ctx = _navegador.currentContext;
+    if (ctx != null && ctx.mounted) _aviso(ctx, 'A sua conta foi apagada.');
+    return null;
   }
 
   Future<void> _trocarPerfil(BuildContext context) async {
@@ -566,10 +916,7 @@ class _AmparoAppState extends State<AmparoApp> {
         Builder(
           builder: (ctx) => CriarContaEcra(
             aoEntrar: () => Navigator.of(ctx).maybePop(),
-            aoApple: () => _aviso(
-              ctx,
-              'Registar com a Apple liga-se quando a conta Apple Developer estiver configurada.',
-            ),
+            aoApple: () => _entrarComApple(ctx),
             aoGoogle: () => _entrarComGoogle(ctx),
             googleWeb: widget.google?.botaoWeb(),
             aoCriar: (nome, email, senha) async {
@@ -594,10 +941,19 @@ class _AmparoAppState extends State<AmparoApp> {
 
   /// "Adicionar receita": formulário, geração das tomas no servidor e resultado.
   void _fluxoReceita(BuildContext context, Perfil perfil) {
+    final alarmesAqui =
+        widget.alarmes.suportado && perfil.alarmesEm == AlarmesEm.cuidador;
     FluxoReceita(
       repositorio: widget.repositorio,
       perfil: perfil,
       relogio: widget.relogio,
+      // Recarregar as tomas da pessoa aberta reagenda os alarmes dela neste telemóvel.
+      agendarAlarmes: alarmesAqui
+          ? () async {
+              final c = _controlador;
+              if (c != null && c.perfil.id == perfil.id) await c.carregar();
+            }
+          : null,
       // Assim que a receita fica criada, as listas passam a mostrá-la, mesmo que se saia do fluxo a meio.
       aoCriada: () {
         _controlador?.carregar();
@@ -768,6 +1124,8 @@ class _AmparoAppState extends State<AmparoApp> {
   @override
   void dispose() {
     _googleEventos?.cancel();
+    _respostasAlarme?.cancel();
+    _mensagensPush?.cancel();
     _controlador?.dispose();
     _receitas?.dispose();
     super.dispose();
@@ -819,10 +1177,7 @@ class _AmparoAppState extends State<AmparoApp> {
           erroInicial: widget.telaInicial == 'entrar-erro'
               ? 'credenciais_invalidas'
               : null,
-          aoApple: () => _aviso(
-            context,
-            'Entrar com a Apple liga-se quando a conta Apple Developer estiver configurada.',
-          ),
+          aoApple: () => _entrarComApple(context),
           aoGoogle: () => _entrarComGoogle(context),
           googleWeb: widget.google?.botaoWeb(),
           aoTerCodigo: () => _terCodigo(context),
@@ -858,6 +1213,10 @@ class _AmparoAppState extends State<AmparoApp> {
           0 => CuidadorHoje(
             controlador: c!,
             aoTrocarPerfil: () => _trocarPerfil(context),
+            aoLigar: c.perfil.telefone == null
+                ? null
+                : (_) => _ligar(context, c.perfil.telefone!),
+            aoLembrar: (t) => _lembrar(context, t),
           ),
           1 => ReceitasEcra(
             controlador: _receitas!,
@@ -874,8 +1233,11 @@ class _AmparoAppState extends State<AmparoApp> {
             cuidador: widget.autenticacao.nome,
             adesao: percentagemAdesao(_controlador!.semana),
             aoMudarDePerfil: () => _trocarPerfil(context),
-            aoTelemoveisLigados: () =>
-                _ligarTelemovel(context, _controlador!.perfil),
+            aoTelemoveisLigados: () => _telemoveis(context),
+            aoConta: () => _conta(context),
+            aoAlarmesFiaveis: () => _alarmesFiaveis(context),
+            alarmesEmFalta: _alarmesEmFalta,
+            aoNumeroPessoa: () => _numeroPessoa(context),
             aoTamanhoTexto: () => _tamanhoTexto(context),
             aoHistorico: () => Navigator.of(context).push(
               rotaPagina<void>(
@@ -908,6 +1270,9 @@ class _AmparoAppState extends State<AmparoApp> {
                   repositorio: widget.repositorio,
                   perfil: _controlador!.perfil,
                   proprio: proprio,
+                  aoPedirNotificacoes: () async {
+                    await widget.push.pedirPermissao();
+                  },
                 ),
               ),
             ),

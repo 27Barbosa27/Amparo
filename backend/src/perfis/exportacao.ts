@@ -1,3 +1,4 @@
+import { decifrar } from '../auth/cifra.js';
 import { listarDispositivos } from '../dispositivos/servico.js';
 import type { Db } from '../db.js';
 import { listarMedicamentos, listarReceitas } from '../medicacao/servico.js';
@@ -6,8 +7,8 @@ import { listarMedicamentos, listarReceitas } from '../medicacao/servico.js';
  * Portabilidade (RGPD): tudo o que a app guarda sobre a pessoa acompanhada, em JSON legível.
  * Sem hashes, tokens nem chaves, e sem identificar os cuidadores (só quantos são).
  */
-export async function exportarPerfil(db: Db, mestra: Buffer, profileId: string, userId: string, ip?: string) {
-  const p = await db.query('select pseudonimo, timezone, tamanho_texto, alarmes_em, criado_em from profiles where id = $1', [profileId]);
+export async function exportarPerfil(db: Db, chaves: { mestra: Buffer; campos: Buffer }, profileId: string, userId: string, ip?: string) {
+  const p = await db.query('select pseudonimo, timezone, tamanho_texto, alarmes_em, telefone_cifrado, criado_em from profiles where id = $1', [profileId]);
   const acesso = await db.query('select papel, criado_em, revogado_em, autorizacao_declarada_em, autorizacao_versao from profile_access where profile_id = $1 order by criado_em, user_id', [profileId]);
   const tomas = await db.query(
     'select id, receita_id, agendada_utc, estado, tomada_em_utc, origem, registado_em from tomas where profile_id = $1 order by agendada_utc, id',
@@ -19,7 +20,14 @@ export async function exportarPerfil(db: Db, mestra: Buffer, profileId: string, 
   const r = p.rows[0];
   return {
     geradoEm: new Date(),
-    perfil: { pseudonimo: r.pseudonimo, timezone: r.timezone, tamanhoTexto: r.tamanho_texto, alarmesEm: r.alarmes_em, criadoEm: r.criado_em },
+    perfil: {
+      pseudonimo: r.pseudonimo,
+      timezone: r.timezone,
+      tamanhoTexto: r.tamanho_texto,
+      alarmesEm: r.alarmes_em,
+      telefone: r.telefone_cifrado ? decifrar(r.telefone_cifrado as Buffer, chaves.campos) : null,
+      criadoEm: r.criado_em,
+    },
     cuidadores: acesso.rows.map((a) => ({
       papel: a.papel,
       desde: a.criado_em,
@@ -27,8 +35,8 @@ export async function exportarPerfil(db: Db, mestra: Buffer, profileId: string, 
       autorizacaoDeclaradaEm: a.autorizacao_declarada_em,
       autorizacaoVersao: a.autorizacao_versao,
     })),
-    medicamentos: await listarMedicamentos(db, mestra, profileId),
-    receitas: await listarReceitas(db, mestra, profileId),
+    medicamentos: await listarMedicamentos(db, chaves.mestra, profileId),
+    receitas: await listarReceitas(db, chaves.mestra, profileId),
     tomas: tomas.rows.map((t) => ({
       id: t.id,
       receitaId: t.receita_id,

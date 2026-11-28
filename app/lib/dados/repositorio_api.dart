@@ -52,16 +52,21 @@ class RepositorioApi implements Repositorio {
     );
   }
 
+  /// Um perfil tal como a API o devolve (`/profiles`, `/pairing/redeem`).
+  static Perfil perfilDaApi(Map<String, dynamic> p) => Perfil(
+    id: p['id'] as String,
+    nome: p['pseudonimo'] as String,
+    tamanhoTexto: TamanhoTexto.daApi(p['tamanhoTexto']),
+    alarmesEm: AlarmesEm.daApi(p['alarmesEm']),
+    telefone: p['telefone'] as String?,
+  );
+
   @override
   Future<List<Perfil>> perfis() async {
     final j = await _api.pedir('GET', '/profiles');
     return [
       for (final p in (j!['perfis'] as List))
-        Perfil(
-          id: p['id'] as String,
-          nome: p['pseudonimo'] as String,
-          tamanhoTexto: TamanhoTexto.daApi(p['tamanhoTexto']),
-        ),
+        perfilDaApi(p as Map<String, dynamic>),
     ];
   }
 
@@ -260,12 +265,7 @@ class RepositorioApi implements Repositorio {
         },
       },
     );
-    final p = j!['perfil'] as Map<String, dynamic>;
-    return Perfil(
-      id: p['id'] as String,
-      nome: p['pseudonimo'] as String,
-      tamanhoTexto: TamanhoTexto.daApi(p['tamanhoTexto']),
-    );
+    return perfilDaApi(j!['perfil'] as Map<String, dynamic>);
   }
 
   AlertasPrefs _alertasPrefs(Map<String, dynamic> p) => AlertasPrefs(
@@ -317,17 +317,96 @@ class RepositorioApi implements Repositorio {
         'alarmesEm': pessoa.alarmesEm == AlarmesEm.pessoa
             ? 'dispositivo_da_pessoa'
             : 'dispositivo_do_cuidador',
+        if (pessoa.telefone != null && pessoa.telefone!.trim().isNotEmpty)
+          'telefone': pessoa.telefone!.trim(),
         // O cuidador declara que tem a autorização da pessoa ou do seu representante
         // (o ecrã obriga a marcar a caixa antes de criar).
         'autorizacaoDeclarada': true,
       },
     );
-    final p = j!['perfil'] as Map<String, dynamic>;
-    return Perfil(
-      id: p['id'] as String,
-      nome: p['pseudonimo'] as String,
-      tamanhoTexto: pessoa.tamanhoTexto,
+    return perfilDaApi(j!['perfil'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Perfil> atualizarTelefone(String perfilId, String? telefone) async {
+    final limpo = telefone?.trim();
+    final j = await _api.pedir(
+      'PATCH',
+      '/profiles/$perfilId',
+      perfilId: perfilId,
+      corpo: {'telefone': limpo == null || limpo.isEmpty ? null : limpo},
     );
+    return perfilDaApi(j!['perfil'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<Dispositivo>> dispositivos(String perfilId) async {
+    final j = await _api.pedir('GET', '/profiles/$perfilId/devices');
+    return [
+      for (final d in (j!['dispositivos'] as List))
+        () {
+          final p = d['permissoes'] as Map?;
+          return Dispositivo(
+            id: d['id'] as String,
+            nome: d['nome'] as String?,
+            ligadoDesde: _data(d['ligadoDesde']),
+            ultimaLigacao: d['ultimaLigacao'] == null
+                ? null
+                : _data(d['ultimaLigacao']),
+            alarmesAgendados: d['alarmesAgendados'] as int?,
+            permissoes: p == null
+                ? null
+                : PermissoesAlarme(
+                    alarmesExatos: p['alarmesExatos'] == true,
+                    bateriaSemLimites: p['bateriaSemLimites'] == true,
+                    ecraBloqueado: p['ecraBloqueado'] == true,
+                  ),
+          );
+        }(),
+    ];
+  }
+
+  @override
+  Future<void> desligarDispositivo(
+    String perfilId,
+    String dispositivoId,
+  ) async {
+    await _api.pedir('DELETE', '/profiles/$perfilId/devices/$dispositivoId');
+  }
+
+  @override
+  Future<void> lembrar(String perfilId, String tomaId) async {
+    await _api.pedir('POST', '/tomas/$tomaId/lembrar', perfilId: perfilId);
+  }
+
+  @override
+  Future<void> enviarEstadoAlarmes(int agendados, PermissoesAlarme p) async {
+    await _api.pedir(
+      'POST',
+      '/devices/heartbeat',
+      corpo: {
+        'alarmesAgendados': agendados,
+        'permissoes': {
+          'alarmesExatos': p.alarmesExatos,
+          'bateriaSemLimites': p.bateriaSemLimites,
+          'ecraBloqueado': p.ecraBloqueado,
+        },
+      },
+    );
+  }
+
+  @override
+  Future<void> registarPush(String plataforma, String token) async {
+    await _api.pedir(
+      'PUT',
+      '/push-tokens',
+      corpo: {'plataforma': plataforma, 'token': token},
+    );
+  }
+
+  @override
+  Future<void> removerPush(String token) async {
+    await _api.pedir('DELETE', '/push-tokens', corpo: {'token': token});
   }
 
   String _numero(Object? v) =>

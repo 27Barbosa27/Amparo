@@ -2,13 +2,15 @@
     <!-- A app fala com a API do Amparo por HTTPS. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- SPIKE alarmes (docs/plano.md secção 3.3): remover ou tornar definitivo depois do spike. -->
+    <!-- Alarmes das tomas (docs/plano.md secção 3.3) e o ecrã "Alarmes fiáveis". -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- "Bateria sem limites": sem isto o Android pode adormecer a app e atrasar os alarmes. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <application
         android:label="amparo"
@@ -42,7 +44,20 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- SPIKE alarmes: receivers do flutter_local_notifications para disparar com a app fechada
+        <!-- "Entrar com a Apple" no Android: a página da Apple volta à app por aqui (via /auth/apple/callback). -->
+        <activity
+            android:name="com.aboutyou.dart_packages.sign_in_with_apple.SignInWithAppleCallback"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="signinwithapple" />
+                <data android:path="callback" />
+            </intent-filter>
+        </activity>
+
+        <!-- Receivers do flutter_local_notifications para disparar com a app fechada
              e voltar a agendar depois de reiniciar o telemóvel. -->
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />

@@ -16,10 +16,15 @@ class AlertasCuidadorEcra extends StatefulWidget {
     required this.repositorio,
     required this.perfil,
     required this.proprio,
+    this.aoPedirNotificacoes,
   });
 
   final Repositorio repositorio;
   final Perfil perfil;
+
+  /// Os alertas chegam por notificação: ao guardar com algum ligado, pede-se a permissão (o sistema só
+  /// mostra o pedido enquanto a pessoa não tiver respondido; nunca se insiste).
+  final Future<void> Function()? aoPedirNotificacoes;
 
   /// O perfil aberto é o do próprio cuidador: muda só a frase do subtítulo.
   final bool proprio;
@@ -90,6 +95,9 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
       _aGuardar = true;
       _erro = null;
     });
+    if (prefs.tomaNaoConfirmada || prefs.tomaFeita || prefs.receitaAcabar) {
+      await widget.aoPedirNotificacoes?.call();
+    }
     try {
       await widget.repositorio.atualizarAlertasPrefs(
         widget.perfil.id,
@@ -97,9 +105,11 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
       );
       if (mounted) Navigator.of(context).maybePop();
     } on ErroApi catch (e) {
-      setState(() => _erro = e.codigo == 'sem_rede'
-          ? 'Sem ligação à internet. Tente outra vez quando houver rede.'
-          : 'Não foi possível guardar. Tente outra vez.');
+      setState(
+        () => _erro = e.codigo == 'sem_rede'
+            ? 'Sem ligação à internet. Tente outra vez quando houver rede.'
+            : 'Não foi possível guardar. Tente outra vez.',
+      );
     } catch (_) {
       setState(() => _erro = 'Não foi possível guardar. Tente outra vez.');
     } finally {
@@ -143,7 +153,11 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Botao(texto: 'Tentar outra vez', icone: Icons.refresh, aoTocar: _carregar),
+                Botao(
+                  texto: 'Tentar outra vez',
+                  icone: Icons.refresh,
+                  aoTocar: _carregar,
+                ),
               ],
             ),
           )
@@ -159,8 +173,9 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
                       : 'Aviso se ${widget.perfil.nome} não confirmar a tempo',
                   ligado: prefs.tomaNaoConfirmada,
                   primeira: true,
-                  aoMudar: (v) =>
-                      setState(() => _prefs = prefs.copiarCom(tomaNaoConfirmada: v)),
+                  aoMudar: (v) => setState(
+                    () => _prefs = prefs.copiarCom(tomaNaoConfirmada: v),
+                  ),
                   extra: prefs.tomaNaoConfirmada
                       ? Padding(
                           padding: const EdgeInsets.only(top: 12),
@@ -178,14 +193,17 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
                       ? 'Aviso sempre que confirmar'
                       : 'Aviso sempre que ${widget.perfil.nome} confirmar',
                   ligado: prefs.tomaFeita,
-                  aoMudar: (v) => setState(() => _prefs = prefs.copiarCom(tomaFeita: v)),
+                  aoMudar: (v) =>
+                      setState(() => _prefs = prefs.copiarCom(tomaFeita: v)),
                 ),
                 _LinhaAlerta(
                   titulo: 'Receita a acabar',
                   descricao: 'Aviso antes de a receita acabar',
                   ligado: prefs.receitaAcabar,
                   ultima: true,
-                  aoMudar: (v) => setState(() => _prefs = prefs.copiarCom(receitaAcabar: v)),
+                  aoMudar: (v) => setState(
+                    () => _prefs = prefs.copiarCom(receitaAcabar: v),
+                  ),
                   extra: prefs.receitaAcabar
                       ? Padding(
                           padding: const EdgeInsets.only(top: 12),
@@ -214,7 +232,11 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
                 Expanded(
                   child: Text(
                     'Os avisos chegam como notificações no seu telemóvel.',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: t.texto2),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: t.texto2,
+                    ),
                   ),
                 ),
               ],
@@ -232,7 +254,11 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
                 ),
                 child: Text(
                   _erro!,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: t.mauTexto),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: t.mauTexto,
+                  ),
                 ),
               ),
             ),
@@ -256,7 +282,11 @@ class _AlertasCuidadorEcraState extends State<AlertasCuidadorEcra> {
             child: Center(
               child: Text(
                 'Cancelar',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: t.texto),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: t.texto,
+                ),
               ),
             ),
           ),
@@ -361,7 +391,11 @@ class _CampoNumero extends StatelessWidget {
       children: [
         Text(
           prefixo,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: t.texto2),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: t.texto2,
+          ),
         ),
         const SizedBox(width: 10),
         SizedBox(
@@ -372,7 +406,11 @@ class _CampoNumero extends StatelessWidget {
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
             maxLength: 3,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: t.texto),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: t.texto,
+            ),
             decoration: InputDecoration(
               counterText: '',
               isDense: true,
@@ -388,7 +426,11 @@ class _CampoNumero extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           sufixo,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: t.texto2),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: t.texto2,
+          ),
         ),
       ],
     );

@@ -35,11 +35,7 @@ class LigacaoApi implements LigacaoDispositivo {
   @override
   Repositorio? get repositorio => _repo;
 
-  Perfil _perfil(Map<String, dynamic> p) => Perfil(
-    id: p['id'] as String,
-    nome: p['pseudonimo'] as String,
-    tamanhoTexto: TamanhoTexto.daApi(p['tamanhoTexto']),
-  );
+  Perfil _perfil(Map<String, dynamic> p) => RepositorioApi.perfilDaApi(p);
 
   void _usar(String token) {
     final sessao = SessaoMemoria()..acesso = token;

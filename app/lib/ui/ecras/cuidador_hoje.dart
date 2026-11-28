@@ -45,7 +45,8 @@ class CuidadorHoje extends StatefulWidget {
   /// Abre o detalhe da toma (a linha com a seta, nas tomas por confirmar).
   final void Function(Toma toma)? aoAbrirDetalhe;
 
-  /// "Ligar" e "Lembrar" da próxima toma. Sem função ligada, avisam que ainda não estão disponíveis.
+  /// "Ligar" e "Lembrar" da próxima toma. Sem [aoLigar] (a pessoa não tem número) o "Ligar" não aparece;
+  /// sem [aoLembrar], o "Lembrar" avisa que ainda não está disponível.
   final void Function(Toma toma)? aoLigar;
   final void Function(Toma toma)? aoLembrar;
 
@@ -854,20 +855,21 @@ class _ItemTempo extends StatelessWidget {
                 if (!proprio)
                   Row(
                     children: [
-                      Expanded(
-                        child: _BotaoToma(
-                          texto: 'Ligar a $nome',
-                          icone: Icones.telefone,
-                          tracoIcone: 2,
-                          fundo: t.primariaSuave,
-                          cor: t.sobrePrimariaSuave,
-                          peso: FontWeight.w800,
-                          aoTocar: () => aoLigar != null
-                              ? aoLigar!(toma)
-                              : _emBreve(context, 'Ligar à pessoa'),
+                      // Sem o número da pessoa (Mais › "Número da Rosa") não há a quem ligar.
+                      if (aoLigar != null) ...[
+                        Expanded(
+                          child: _BotaoToma(
+                            texto: 'Ligar a $nome',
+                            icone: Icones.telefone,
+                            tracoIcone: 2,
+                            fundo: t.primariaSuave,
+                            cor: t.sobrePrimariaSuave,
+                            peso: FontWeight.w800,
+                            aoTocar: () => aoLigar!(toma),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
+                      ],
                       Expanded(
                         child: _BotaoToma(
                           texto: 'Lembrar $nome',

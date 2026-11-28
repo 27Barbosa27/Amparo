@@ -23,12 +23,17 @@ class FluxoReceita {
     required this.relogio,
     required this.aoVerHoje,
     this.aoCriada,
+    this.agendarAlarmes,
     this.intervaloDeConsulta = const Duration(milliseconds: 500),
   });
 
   final Repositorio repositorio;
   final Perfil perfil;
   final DateTime Function() relogio;
+
+  /// Quando os alarmes desta pessoa tocam neste telemóvel: recarrega as tomas e agenda-os. Nulo quando
+  /// tocam no telemóvel da pessoa (ou neste não há alarmes), e o passo "Agendar os alarmes" não aparece.
+  final Future<void> Function()? agendarAlarmes;
 
   /// O cuidador escolheu "Ver página principal": quem chamou volta a ela e recarrega.
   final VoidCallback aoVerHoje;
@@ -50,6 +55,7 @@ class FluxoReceita {
           nova: nova,
           relogio: relogio,
           intervalo: intervaloDeConsulta,
+          agendarAlarmes: agendarAlarmes,
           aoConcluir: (c2, r) {
             aoCriada?.call();
             Navigator.of(c2).pushReplacement(
@@ -341,7 +347,8 @@ class _ReceitaNovaEcraState extends State<ReceitaNovaEcra> {
 enum _Fase { aCriar, aGerar, feito, erro }
 
 /// "A criar as tomas" (design: Carregar-Receita): a geração corre em segundo plano no servidor e a app
-/// segue o estado. Os passos mostram só o que é verdade: os alarmes locais ainda não existem.
+/// segue o estado. Os passos mostram só o que é verdade: "Agendar os alarmes" só aparece quando os alarmes
+/// tocam neste telemóvel, e só fica feito depois de agendados.
 class CarregarReceitaEcra extends StatefulWidget {
   const CarregarReceitaEcra({
     super.key,
@@ -351,6 +358,7 @@ class CarregarReceitaEcra extends StatefulWidget {
     required this.relogio,
     required this.aoConcluir,
     this.intervalo = const Duration(milliseconds: 500),
+    this.agendarAlarmes,
   });
 
   final Repositorio repositorio;
@@ -360,12 +368,16 @@ class CarregarReceitaEcra extends StatefulWidget {
   final void Function(BuildContext, Receita) aoConcluir;
   final Duration intervalo;
 
+  /// Ver [FluxoReceita.agendarAlarmes].
+  final Future<void> Function()? agendarAlarmes;
+
   @override
   State<CarregarReceitaEcra> createState() => _CarregarReceitaEcraState();
 }
 
 class _CarregarReceitaEcraState extends State<CarregarReceitaEcra> {
   _Fase _fase = _Fase.aCriar;
+  _Passo _alarmes = _Passo.espera;
   Receita? _receita;
   int _tomas = 0;
   String _erro = 'falha_ao_guardar';
@@ -394,8 +406,22 @@ class _CarregarReceitaEcraState extends State<CarregarReceitaEcra> {
         );
         if (!mounted) return;
         if (e.fase == FaseGeracao.concluida) {
+          final agendar = widget.agendarAlarmes;
+          if (agendar != null) {
+            setState(() {
+              _tomas = e.tomasGeradas;
+              _alarmes = _Passo.aCorrer;
+            });
+            try {
+              await agendar();
+            } catch (_) {
+              // as tomas estão criadas; os alarmes voltam a agendar-se ao abrir "Hoje"
+            }
+            if (!mounted) return;
+          }
           setState(() {
             _tomas = e.tomasGeradas;
+            _alarmes = _Passo.feito;
             _fase = _Fase.feito;
           });
           return;
@@ -519,11 +545,8 @@ class _CarregarReceitaEcraState extends State<CarregarReceitaEcra> {
                   ? 'Gerar as tomas ($_tomas)'
                   : 'Gerar as tomas',
             ),
-            const _LinhaPasso(
-              estado: _Passo.emBreve,
-              texto: 'Agendar os alarmes',
-              nota: 'Em breve',
-            ),
+            if (widget.agendarAlarmes != null)
+              _LinhaPasso(estado: _alarmes, texto: 'Agendar os alarmes'),
             _LinhaPasso(
               estado: _fase == _Fase.feito ? _Passo.feito : _Passo.espera,
               texto: 'Sincronizar com $nome',
@@ -687,13 +710,12 @@ class _PintorRoda extends CustomPainter {
       antigo.pista != pista || antigo.arco != arco || antigo.traco != traco;
 }
 
-enum _Passo { espera, aCorrer, feito, emBreve }
+enum _Passo { espera, aCorrer, feito }
 
 class _LinhaPasso extends StatelessWidget {
-  const _LinhaPasso({required this.estado, required this.texto, this.nota});
+  const _LinhaPasso({required this.estado, required this.texto});
   final _Passo estado;
   final String texto;
-  final String? nota;
 
   @override
   Widget build(BuildContext context) {
@@ -716,14 +738,13 @@ class _LinhaPasso extends StatelessWidget {
         ),
       ),
     };
-    final apagado = estado == _Passo.emBreve || estado == _Passo.espera;
+    final apagado = estado == _Passo.espera;
     return Semantics(
       container: true,
       label:
           '$texto, ${switch (estado) {
             _Passo.feito => 'feito',
             _Passo.aCorrer => 'a decorrer',
-            _Passo.emBreve => 'em breve',
             _Passo.espera => 'à espera',
           }}',
       excludeSemantics: true,
@@ -743,15 +764,6 @@ class _LinhaPasso extends StatelessWidget {
                 ),
               ),
             ),
-            if (nota != null)
-              Text(
-                nota!,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: t.texto2,
-                ),
-              ),
           ],
         ),
       ),

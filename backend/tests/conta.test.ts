@@ -128,6 +128,7 @@ describe('Exportação (portabilidade)', () => {
     const r = await request(app).get('/auth/me/exportacao').set(auth(a));
     expect(r.status).toBe(200);
     expect(r.body.conta).toMatchObject({ id: a.id, nome: 'Ana', email: a.email, telefone: '+351 912 345 678' });
+    expect((await request(app).get('/auth/me').set(auth(a))).body.utilizador.temSenha).toBe(true);
     expect(r.body.conta.consentimentoVersao).toBeTruthy();
     expect(r.body.perfis).toEqual([{ id: p, pseudonimo: 'Avó Rosa', papel: 'owner' }]);
     expect(JSON.stringify(r.body)).not.toMatch(/password|hash/i);
@@ -196,6 +197,8 @@ describe('Apagar a conta', () => {
     const e = await request(appExt).post('/auth/google').send({ idToken, nonce: 'nonce-da-app-123', aceitaTermos: true });
     utilizadores.push(e.body.utilizador.id);
     const h = { Authorization: `Bearer ${e.body.accessToken}` };
+    // sem palavra-passe: a app sabe que tem de pedir a confirmação explícita
+    expect((await request(appExt).get('/auth/me').set(h)).body.utilizador.temSenha).toBe(false);
     expect((await request(appExt).delete('/auth/me').set(h).send({})).status).toBe(403);
     expect((await request(appExt).delete('/auth/me').set(h).send({ confirmar: true })).status).toBe(204);
     expect((await db.query('select 1 from users where id = $1', [e.body.utilizador.id])).rowCount).toBe(0);

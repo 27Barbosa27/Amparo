@@ -181,6 +181,9 @@ audit_logs(id bigserial, ts_utc, user_id, profile_id, acao, entidade,
 | Receitas, Adicionar receita | `GET/POST/PATCH /receitas` (gera tomas) |
 | Detalhe da toma | `GET /tomas/:id` + histórico dos 7 dias |
 | Alertas ao cuidador | `GET/PUT /alert-prefs` |
+| Lembrar a pessoa (card da próxima toma) | `POST /tomas/:id/lembrar` → push `lembrete` aos telemóveis dela, que mostram o alarme dessa toma |
+| Ligar à pessoa | telefone opcional do perfil (`POST/PATCH /profiles`, `telefone`), abre o marcador |
+| A sua conta | `GET /auth/me/exportacao` + `GET /profiles/:id/exportacao` (ficheiro JSON), `DELETE /auth/me` |
 | Tamanho do texto | `PATCH /profiles/:id` (`tamanho_texto`) |
 | Alarme / Adiar | local; reagenda a notificação 10 min |
 | Alarmes fiáveis | local (estado das permissões) |
@@ -193,6 +196,8 @@ audit_logs(id bigserial, ts_utc, user_id, profile_id, acao, entidade,
 ## 7. Plano de Execução (por ordem)
 
 > **Estado do backend (22 nov 2026):** os pontos 2, 3, 4 (servidor), 5 (servidor), 6 (servidor) e 7 (ficheiros de deploy, backups e CI) estão feitos e testados (256 testes, incluindo a recuperação de palavra-passe por email). Falta o que depende de contas externas ou da app: spike de alarmes (1), testes contra Firebase/Apple/Google verdadeiros, DPIA, política de privacidade e a VPS real. Ver `backend/README.md` e `docs/deploy.md`.
+
+> **Estado da app (27 nov 2026):** alarmes locais ligados ao ecrã "Hoje" (só tocam no telemóvel de quem os recebe), alarme em ecrã inteiro com "Adiar 10 min", "Alarmes fiáveis" com as 3 permissões, push (FCM), estado do telemóvel da pessoa (heartbeat) e "Telemóveis ligados", "Lembrar" e "Ligar", entrar com a Apple (código pronto, sem conta Apple Developer para testar), exportar e apagar a conta. Falta testar tudo isto num Android real e o spike no iPhone (no iPhone os alarmes ainda estão desligados).
 
 0. **Design:** feito (25 ecrãs). Manter o artefacto como referência; tokens (cores, tipografia, espaçamentos) passam para o tema Flutter.
 1. **Spike técnico:** alarme exato com snooze em background, fiável em Android real **e iPhone**. Se falhar, o plano de alarmes muda antes de mais código.

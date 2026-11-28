@@ -47,12 +47,12 @@ App de lembretes de medicação para cuidadores e para as pessoas de quem cuidam
 
 **Backend:** autenticação (email, Google e Apple, verificação e recuperação de palavra-passe), perfis e permissões, medicamentos e receitas com stock, tomas, ligação do telemóvel por código, alertas ao cuidador e push (FCM), auditoria e RGPD, deploy e CI.
 
-**App:** ligada à API, com entrar e criar conta, adicionar pessoa e ligar telemóvel por código, receitas, ecrã *Hoje* do cuidador e da pessoa acompanhada, histórico de tomas com gráfico, e definições de alertas, som do alarme e tamanho do texto.
+**App:** ligada à API, com entrar e criar conta, adicionar pessoa e ligar telemóvel por código, receitas, ecrã *Hoje* do cuidador e da pessoa acompanhada, histórico de tomas com gráfico, alarmes locais (ecrã inteiro, adiar, alarmes fiáveis), push, telemóveis ligados, "Ligar" e "Lembrar", exportar e apagar a conta, e definições de alertas, som do alarme e tamanho do texto.
 
 ## Roadmap
 
-- [ ] Alarmes locais no telemóvel, com "Adiar 10 minutos"
-- [ ] Push no lado Flutter ([`push-flutter`](docs/push-flutter.md))
+- [x] Alarmes locais no telemóvel, com "Adiar 10 minutos" e "Alarmes fiáveis" (Android; falta o iPhone)
+- [x] Push no lado Flutter ([`push-flutter`](docs/push-flutter.md)), "Lembrar" e "Telemóveis ligados" (falta testar num Android real)
 - [ ] Reposição de stock ([`reposicao-stock`](docs/reposicao-stock.md))
 - [ ] Fila offline para marcar tomas sem rede ([`fila-offline`](docs/fila-offline.md))
 - [ ] Vários cuidadores por pessoa ([`varios-cuidadores`](docs/varios-cuidadores.md))

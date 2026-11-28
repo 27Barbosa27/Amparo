@@ -356,7 +356,11 @@ class _LinhaReceita extends StatelessWidget {
                   'Só chega para $dias ${dias == 1 ? 'dia' : 'dias'}: '
                   'faltam cerca de ${receita.emFalta} '
                   '${receita.emFalta == 1 ? 'unidade' : 'unidades'} até ao fim da receita.',
-                  style: Estilos.corpo(t, peso: FontWeight.w700, cor: t.avisoTexto),
+                  style: Estilos.corpo(
+                    t,
+                    peso: FontWeight.w700,
+                    cor: t.avisoTexto,
+                  ),
                 ),
               ],
             ],
@@ -388,10 +392,26 @@ class MaisEcra extends StatelessWidget {
     this.somAlarme = const SomEmbutido(SomAlarme.sino),
     this.aoSomAlarme,
     this.aoAlertasCuidador,
+    this.aoConta,
+    this.aoAlarmesFiaveis,
+    this.alarmesEmFalta,
+    this.aoNumeroPessoa,
   });
 
   /// "Alertas ao cuidador": abre o ecrã de escolha de quando é avisado.
   final VoidCallback? aoAlertasCuidador;
+
+  /// Tocar na linha da conta: "A sua conta" (exportar e apagar).
+  final VoidCallback? aoConta;
+
+  /// "Alarmes fiáveis": as permissões dos alarmes neste telemóvel.
+  final VoidCallback? aoAlarmesFiaveis;
+
+  /// Quantas permissões faltam ("2 em falta"). Nulo quando não se sabe (ou não há alarmes aqui).
+  final int? alarmesEmFalta;
+
+  /// "Número da Rosa": o telemóvel da pessoa, para o botão "Ligar". Só quando acompanha outra pessoa.
+  final VoidCallback? aoNumeroPessoa;
 
   /// "Histórico de tomas": abre o ecrã do histórico.
   final VoidCallback? aoHistorico;
@@ -405,7 +425,7 @@ class MaisEcra extends StatelessWidget {
   /// "Som do alarme": abre o ecrã de escolha.
   final VoidCallback? aoSomAlarme;
 
-  /// "Telemóveis ligados": mostra um código para ligar o telemóvel da pessoa.
+  /// "Telemóveis ligados": os telemóveis da pessoa, com o estado de cada um.
   final VoidCallback? aoTelemoveisLigados;
   final Perfil perfil;
   final VoidCallback aoVerComoAPessoaVe;
@@ -512,38 +532,49 @@ class MaisEcra extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (cuidador != null) ...[
-                Row(
-                  children: [
-                    Avatar(
-                      inicial: cuidador!.substring(0, 1).toUpperCase(),
-                      tamanho: 40,
-                      coral: true,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            cuidador!,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: t.texto,
-                            ),
+                Semantics(
+                  button: aoConta != null,
+                  label: '$cuidador, a sua conta',
+                  excludeSemantics: true,
+                  child: InkWell(
+                    onTap: aoConta,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Row(
+                      children: [
+                        Avatar(
+                          inicial: cuidador!.substring(0, 1).toUpperCase(),
+                          tamanho: 40,
+                          coral: true,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                cuidador!,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: t.texto,
+                                ),
+                              ),
+                              Text(
+                                'A sua conta · Cuidador',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                  color: t.texto2,
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            'A sua conta · Cuidador',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: t.texto2,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        if (aoConta != null)
+                          Icone(Icones.setaDireita, tamanho: 24, cor: t.texto),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 14),
                 Container(height: 1, color: t.linha),
@@ -686,7 +717,29 @@ class MaisEcra extends StatelessWidget {
             linha(
               Icones.alertaCirculo,
               'Alarmes fiáveis',
-              aoTocar: () => _emBreve(context, 'Os alarmes fiáveis'),
+              aoTocar:
+                  aoAlarmesFiaveis ??
+                  () => _emBreve(context, 'Os alarmes fiáveis'),
+              fim: alarmesEmFalta == null || alarmesEmFalta == 0
+                  ? null
+                  : Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: t.avisoSuave,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$alarmesEmFalta em falta',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: t.avisoTexto,
+                        ),
+                      ),
+                    ),
             ),
             linha(
               Icones.telemovel,
@@ -695,6 +748,13 @@ class MaisEcra extends StatelessWidget {
                   aoTelemoveisLigados ??
                   () => _emBreve(context, 'Os telemóveis ligados'),
             ),
+            if (!proprio && aoNumeroPessoa != null)
+              linha(
+                Icones.telefone,
+                'Número de ${perfil.nome}',
+                valor: perfil.telefone ?? 'Adicionar',
+                aoTocar: aoNumeroPessoa,
+              ),
             linha(
               Icones.lua,
               'Modo escuro',
@@ -734,4 +794,3 @@ class MaisEcra extends StatelessWidget {
     );
   }
 }
-

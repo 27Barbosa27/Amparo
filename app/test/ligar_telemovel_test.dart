@@ -98,6 +98,9 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('nav-configurações')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Telemóveis ligados'));
+      await tester.pumpAndSettle();
+      // ainda sem telemóveis: o botão é ligar o primeiro
+      await tester.tap(find.text('Ligar o telemóvel de Maria'));
       await tester.pump();
       await tester.pump();
       expect(find.text('482 915'), findsOneWidget);
@@ -118,6 +121,9 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('nav-configurações')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Telemóveis ligados'));
+      await tester.pumpAndSettle();
+      // ainda sem telemóveis: o botão é ligar o primeiro
+      await tester.tap(find.text('Ligar o telemóvel de Maria'));
       await tester.pump();
       await tester.pump();
 

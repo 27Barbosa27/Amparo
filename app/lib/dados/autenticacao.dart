@@ -1,4 +1,14 @@
+import 'dart:convert';
+
 import 'api.dart';
+
+class DadosConta {
+  const DadosConta({required this.temSenha, this.criadaEm});
+
+  /// Falso numa conta criada só com a Apple ou a Google.
+  final bool temSenha;
+  final DateTime? criadaEm;
+}
 
 /// Entrar e sair. Só cuidadores têm conta.
 abstract class Autenticacao {
@@ -26,6 +36,24 @@ abstract class Autenticacao {
     String? nome,
     bool aceitaTermos = false,
   });
+
+  /// O mesmo que [entrarComGoogle], com o ID token da Apple. O nome só vem da Apple na primeira vez.
+  Future<String?> entrarComApple(
+    String idToken,
+    String nonce, {
+    String? nome,
+    bool aceitaTermos = false,
+  });
+
+  /// "A sua conta": desde quando existe e se tem palavra-passe (senão, foi criada com a Apple ou a Google).
+  Future<DadosConta> dadosConta();
+
+  /// Portabilidade (RGPD): a conta e as pessoas de quem é responsável ("owner"), num só JSON legível.
+  Future<String> exportarDados();
+
+  /// Apaga a conta. Com palavra-passe pede-a ([senha]); sem ela, a confirmação explícita. Devolve
+  /// `senha_incorreta`, `sem_rede`..., ou nulo se apagou (e a sessão local também).
+  Future<String?> apagarConta({String? senha});
 
   /// Tenta retomar a sessão guardada. Verdadeiro se há sessão válida.
   Future<bool> restaurar();
@@ -82,11 +110,39 @@ class AutenticacaoApi implements Autenticacao {
     String nonce, {
     String? nome,
     bool aceitaTermos = false,
+  }) => _entrarExterno(
+    'google',
+    idToken,
+    nonce,
+    nome: nome,
+    aceitaTermos: aceitaTermos,
+  );
+
+  @override
+  Future<String?> entrarComApple(
+    String idToken,
+    String nonce, {
+    String? nome,
+    bool aceitaTermos = false,
+  }) => _entrarExterno(
+    'apple',
+    idToken,
+    nonce,
+    nome: nome,
+    aceitaTermos: aceitaTermos,
+  );
+
+  Future<String?> _entrarExterno(
+    String provedor,
+    String idToken,
+    String nonce, {
+    String? nome,
+    bool aceitaTermos = false,
   }) async {
     try {
       final j = await _api.pedir(
         'POST',
-        '/auth/google',
+        '/auth/$provedor',
         corpo: {
           'idToken': idToken,
           'nonce': nonce,
@@ -233,6 +289,47 @@ class AutenticacaoApi implements Autenticacao {
     } on ErroApi {
       return false;
     }
+  }
+
+  @override
+  Future<DadosConta> dadosConta() async {
+    final u = (await _api.pedir('GET', '/auth/me'))!['utilizador'] as Map;
+    return DadosConta(
+      temSenha: u['temSenha'] != false,
+      criadaEm: u['criadoEm'] == null
+          ? null
+          : DateTime.parse(u['criadoEm'] as String).toLocal(),
+    );
+  }
+
+  @override
+  Future<String> exportarDados() async {
+    final conta = (await _api.pedir('GET', '/auth/me/exportacao'))!;
+    // Os perfis de que é "owner" exportam-se inteiros (receitas, tomas...); nos outros só aparece o acesso.
+    final pessoas = <Map<String, dynamic>>[];
+    for (final p in (conta['perfis'] as List? ?? const [])) {
+      if ((p as Map)['papel'] != 'owner') continue;
+      final dados = await _api.pedir('GET', '/profiles/${p['id']}/exportacao');
+      if (dados != null) pessoas.add(dados);
+    }
+    return const JsonEncoder.withIndent('  ')
+        .convert({...conta, 'pessoas': pessoas});
+  }
+
+  @override
+  Future<String?> apagarConta({String? senha}) async {
+    try {
+      await _api.pedir(
+        'DELETE',
+        '/auth/me',
+        corpo: senha == null ? {'confirmar': true} : {'senha': senha},
+      );
+    } on ErroApi catch (e) {
+      return e.codigo;
+    }
+    await _api.sessao.limpar();
+    _nome = null;
+    return null;
   }
 
   @override

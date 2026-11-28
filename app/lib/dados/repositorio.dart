@@ -69,12 +69,39 @@ abstract class Repositorio {
 
   /// Muda o tamanho do texto do perfil (o modo simples aplica-o). Só quem tem o papel de "owner"
   /// pode alterar; o telemóvel de uma pessoa ligada por código não pode.
-  Future<Perfil> atualizarTamanhoTexto(String perfilId, TamanhoTexto tamanhoTexto);
+  Future<Perfil> atualizarTamanhoTexto(
+    String perfilId,
+    TamanhoTexto tamanhoTexto,
+  );
 
   /// As preferências de alerta do cuidador que entrou, para este perfil.
   Future<AlertasPrefs> alertasPrefs(String perfilId);
 
-  Future<AlertasPrefs> atualizarAlertasPrefs(String perfilId, AlertasPrefs prefs);
+  Future<AlertasPrefs> atualizarAlertasPrefs(
+    String perfilId,
+    AlertasPrefs prefs,
+  );
+
+  /// Guarda (ou apaga, com nulo) o telemóvel da pessoa, para o botão "Ligar". Só o "owner".
+  Future<Perfil> atualizarTelefone(String perfilId, String? telefone);
+
+  /// Os telemóveis ligados a esta pessoa por código.
+  Future<List<Dispositivo>> dispositivos(String perfilId);
+
+  /// Desliga um telemóvel: o acesso dele acaba de imediato.
+  Future<void> desligarDispositivo(String perfilId, String dispositivoId);
+
+  /// "Lembrar a Rosa": o telemóvel dela volta a mostrar o alarme desta toma. Lança `ErroApi` com
+  /// `sem_telemovel` (nenhum telemóvel ligado com notificações) ou `lembrete_recente` (há menos de 5 min).
+  Future<void> lembrar(String perfilId, String tomaId);
+
+  /// O telemóvel da pessoa conta ao servidor como estão os alarmes (para "Telemóveis ligados").
+  Future<void> enviarEstadoAlarmes(int agendados, PermissoesAlarme permissoes);
+
+  /// O token de push (FCM) deste telemóvel, do cuidador ou da pessoa: o servidor escolhe o dono pela sessão.
+  Future<void> registarPush(String plataforma, String token);
+
+  Future<void> removerPush(String token);
 }
 
 class RegistoNaoPermitido implements Exception {

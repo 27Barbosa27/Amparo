@@ -351,11 +351,8 @@ void main() {
         expect(find.text('A criar as tomas'), findsOneWidget);
         expect(find.text('Ramipril 5 mg · 3 meses'), findsOneWidget);
         expect(find.text('Gerar as tomas (1)'), findsOneWidget);
-        expect(find.text('Agendar os alarmes'), findsOneWidget);
-        expect(
-          find.text('Em breve'),
-          findsOneWidget,
-        ); // os alarmes locais ainda não existem: não se finge
+        // Os alarmes da Maria tocam no telemóvel dela: aqui não se agenda nada, e não se finge que sim.
+        expect(find.text('Agendar os alarmes'), findsNothing);
         expect(find.text('Sincronizar com Maria'), findsOneWidget);
         await tester.tap(find.text('Continuar'));
         await tester.pumpAndSettle();

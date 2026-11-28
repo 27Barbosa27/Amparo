@@ -100,6 +100,46 @@ class AutenticacaoMemoria implements Autenticacao {
     return null;
   }
 
+  final entradasApple = <String>[];
+
+  @override
+  Future<String?> entrarComApple(
+    String idToken,
+    String nonce, {
+    String? nome,
+    bool aceitaTermos = false,
+  }) async {
+    entradasApple.add(idToken);
+    if (!contasGoogleExistentes.contains(idToken) && !aceitaTermos) {
+      return 'consentimento_necessario';
+    }
+    contasGoogleExistentes.add(idToken);
+    _dentro = true;
+    _nomeRegisto = nome ?? nomeFixo;
+    return null;
+  }
+
+  /// Uma conta criada só com a Apple ou a Google não tem palavra-passe.
+  bool temSenha = true;
+  String senhaDaConta = 'uma-senha-segura-123';
+  bool contaApagada = false;
+
+  @override
+  Future<DadosConta> dadosConta() async =>
+      DadosConta(temSenha: temSenha, criadaEm: DateTime(2026, 11, 18));
+
+  @override
+  Future<String> exportarDados() async =>
+      '{"conta":{"nome":"${nome ?? ''}"},"pessoas":[]}';
+
+  @override
+  Future<String?> apagarConta({String? senha}) async {
+    if (temSenha && senha != senhaDaConta) return 'senha_incorreta';
+    contaApagada = true;
+    _dentro = false;
+    return null;
+  }
+
   @override
   Future<bool> restaurar() async => _dentro;
 

@@ -17,6 +17,9 @@ const eventos: Eventos = {
     if (ganchoFalha) throw new Error('push em baixo');
   },
   async sincronizar() {},
+  async lembrar() {
+    return 'sem_telemovel';
+  },
 };
 const app = createApp(db, config, { auth: { limitarPorIp: false }, dispositivos: { limitarCodigos: false }, eventos });
 const utilizadores: string[] = [];

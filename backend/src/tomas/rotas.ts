@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { exigirPrincipal, perfilDoPedido } from '../auth/principal.js';
+import { exigirPrincipal, perfilDoPedido, soUtilizador } from '../auth/principal.js';
 import type { Config } from '../config.js';
 import { auditarLeituras } from '../auditoria.js';
 import type { Db } from '../db.js';
@@ -80,6 +80,20 @@ export function rotasTomas(db: Db, config: Config, eventos: Eventos): Router {
     const r = await saltarToma(db, { tomaId: idDa(req.params.id), profileId: req.perfil!.id, autor: autorDe(req), ip: req.ip, ...b });
     if (!r.repetido) await sincronizarSeCuidador(req);
     res.json({ estado: r.estado, repetido: r.repetido });
+  });
+
+  // "Lembrar a Rosa": só um cuidador, e só para uma toma ainda por fazer. O push leva só ids.
+  router.post('/:id/lembrar', soUtilizador, async (req, res) => {
+    const tomaId = idDa(req.params.id);
+    const d = await detalheToma(db, mestra, req.perfil!.id, tomaId);
+    if (!d) throw naoEncontrado();
+    if (d.toma.estado !== 'pendente') {
+      res.status(409).json({ erro: 'toma_ja_registada' });
+      return;
+    }
+    const r = await eventos.lembrar(req.perfil!.id, tomaId, req.userId!);
+    if (r === 'enviado') res.status(202).json({ estado: r });
+    else res.status(r === 'recente' ? 429 : 409).json({ erro: r === 'recente' ? 'lembrete_recente' : 'sem_telemovel' });
   });
 
   router.post('/:id/desfazer', async (req, res) => {

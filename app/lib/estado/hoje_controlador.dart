@@ -16,6 +16,8 @@ class HojeControlador extends ChangeNotifier {
     this.cuidador,
     this.aoSessaoExpirada,
     this.alarmes = const ServicoAlarmesNulo(),
+    this.agendarAlarmes = true,
+    this.aposCarregar,
   });
 
   final Repositorio repositorio;
@@ -24,6 +26,12 @@ class HojeControlador extends ChangeNotifier {
 
   /// Alarmes locais das tomas: reagendados sempre que as tomas deste perfil são recarregadas.
   final ServicoAlarmes alarmes;
+
+  /// Falso quando os alarmes deste perfil tocam noutro telemóvel (o da pessoa): aqui não se agenda nada.
+  final bool agendarAlarmes;
+
+  /// Depois de cada carregamento bem-sucedido (o telemóvel da pessoa conta ao servidor como estão os alarmes).
+  final Future<void> Function()? aposCarregar;
 
   /// Quem está a usar a app, quando é um cuidador. Nulo no telemóvel da pessoa.
   final String? cuidador;
@@ -73,7 +81,8 @@ class HojeControlador extends ChangeNotifier {
       _tomas = [..._tomas]..sort((a, b) => a.agendada.compareTo(b.agendada));
       _semana = await repositorio.ultimos7Dias(perfil.id, agora);
       _nomeCuidador = await repositorio.nomeDoCuidador(perfil.id);
-      await alarmes.agendarParaTomas(_tomas);
+      if (agendarAlarmes) await alarmes.agendarParaTomas(perfil.id, _tomas);
+      await aposCarregar?.call().catchError((_) {});
     } on ErroApi catch (e) {
       _falhouCarregar = true;
       _erro = e.codigo;
@@ -91,7 +100,7 @@ class HojeControlador extends ChangeNotifier {
     try {
       final nova = await acao();
       _tomas = [for (final t in _tomas) t.id == nova.id ? nova : t];
-      await alarmes.agendarParaTomas(_tomas);
+      if (agendarAlarmes) await alarmes.agendarParaTomas(perfil.id, _tomas);
       notifyListeners();
       return true;
     } on RegistoNaoPermitido catch (e) {

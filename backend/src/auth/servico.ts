@@ -220,13 +220,13 @@ export async function sair(db: Db, refreshToken: string, ip?: string): Promise<v
 export async function perfilDoUtilizador(
   db: Db,
   userId: string,
-): Promise<{ id: string; nome: string | null; criadoEm: Date } | null> {
-  const { rows } = await db.query<{ id: string; nome_exibicao: string | null; criado_em: Date }>(
-    'select id, nome_exibicao, criado_em from users where id = $1',
+): Promise<{ id: string; nome: string | null; criadoEm: Date; temSenha: boolean } | null> {
+  const { rows } = await db.query<{ id: string; nome_exibicao: string | null; criado_em: Date; tem_senha: boolean }>(
+    'select id, nome_exibicao, criado_em, password_hash is not null as tem_senha from users where id = $1',
     [userId],
   );
   const r = rows[0];
-  return r ? { id: r.id, nome: r.nome_exibicao, criadoEm: r.criado_em } : null;
+  return r ? { id: r.id, nome: r.nome_exibicao, criadoEm: r.criado_em, temSenha: r.tem_senha } : null;
 }
 
 /**

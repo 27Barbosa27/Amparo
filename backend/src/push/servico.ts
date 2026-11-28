@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { cifrar, decifrar } from '../auth/cifra.js';
 import type { Db } from '../db.js';
-import { dispararSemFalhar, type Eventos } from '../eventos.js';
+import { dispararSemFalhar, type Eventos, type ResultadoLembrete } from '../eventos.js';
 import type { EnviadorPush, MensagemPush } from './enviador.js';
 
 export type Dono = { userId: string } | { dispositivoId: string };
@@ -70,6 +70,31 @@ export async function sincronizarDispositivos(db: Db, enviador: EnviadorPush, ch
   await enviarERevogar(db, enviador, await tokensAtivos(db, chaveCampos, { profileId }), { tipo: 'sync', perfil: profileId });
 }
 
+/** Um lembrete por cuidador e por toma em cada janela de 5 minutos. */
+const JANELA_LEMBRETE_MS = 5 * 60_000;
+
+/** "Lembrar": volta a mostrar o alarme da toma nos telemóveis ligados ao perfil. */
+export async function lembrarToma(
+  db: Db,
+  enviador: EnviadorPush,
+  chaveCampos: Buffer,
+  profileId: string,
+  tomaId: string,
+  porUserId: string,
+  agora = Date.now(),
+): Promise<ResultadoLembrete> {
+  const { rows } = await db.query<{ fcm_token_cifrado: Buffer }>(
+    `select p.fcm_token_cifrado from push_tokens p join profile_devices d on d.id = p.device_id
+      where d.profile_id = $1 and d.revogado_em is null and p.revogado_em is null and p.fcm_token_cifrado is not null`,
+    [profileId],
+  );
+  if (rows.length === 0) return 'sem_telemovel';
+  if (!(await marcarAlertaEnviado(db, porUserId, 'lembrete', `${tomaId}:${Math.floor(agora / JANELA_LEMBRETE_MS)}`))) return 'recente';
+  const tokens = rows.map((r) => decifrar(r.fcm_token_cifrado, chaveCampos));
+  await enviarERevogar(db, enviador, tokens, { tipo: 'lembrete', perfil: profileId, toma: tomaId });
+  return 'enviado';
+}
+
 /** Regista um alerta como enviado. Devolve falso se já tinha sido (para nunca avisar duas vezes). */
 export async function marcarAlertaEnviado(db: Db, userId: string, tipo: string, chave: string): Promise<boolean> {
   const r = await db.query('insert into alertas_enviados (user_id, tipo, chave) values ($1, $2, $3) on conflict do nothing', [userId, tipo, chave]);
@@ -92,6 +117,9 @@ export function criarEventosPush(db: Db, enviador: EnviadorPush, chaveCampos: Bu
     },
     async sincronizar(profileId) {
       await sincronizarDispositivos(db, enviador, chaveCampos, profileId);
+    },
+    lembrar(profileId, tomaId, porUserId) {
+      return lembrarToma(db, enviador, chaveCampos, profileId, tomaId, porUserId);
     },
   };
 }

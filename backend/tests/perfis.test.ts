@@ -259,3 +259,40 @@ describe('Papéis: owner e caregiver', () => {
     expect((await request(app).get(`/profiles/${p.id}`).set(auth(a))).status).toBe(404);
   });
 });
+
+describe('Telefone da pessoa (botão "Ligar")', () => {
+  it('é opcional, guarda-se cifrado e volta nas listas, no perfil e na exportação', async () => {
+    const a = await conta();
+    const sem = await novoPerfil(a);
+    expect(sem).toMatchObject({ telefone: null });
+    const p = await novoPerfil(a, { telefone: '+351 912 345 678' });
+    expect(p).toMatchObject({ telefone: '+351 912 345 678' });
+    const { rows } = await db.query('select telefone_cifrado from profiles where id = $1', [p.id]);
+    expect(rows[0].telefone_cifrado.toString('utf8')).not.toContain('912');
+    expect(decifrar(rows[0].telefone_cifrado, lerChave(config.EMAIL_ENC_KEY))).toBe('+351 912 345 678');
+    const lista = await request(app).get('/profiles').set(auth(a));
+    expect(lista.body.perfis.map((x: { telefone: string | null }) => x.telefone)).toEqual([null, '+351 912 345 678']);
+    const exp = await request(app).get(`/profiles/${p.id}/exportacao`).set(auth(a));
+    expect(exp.body.perfil.telefone).toBe('+351 912 345 678');
+  });
+
+  it('o owner muda-o ou apaga-o; o resto do perfil fica igual', async () => {
+    const a = await conta();
+    const p = await novoPerfil(a, { telefone: '912345678' });
+    const mudou = await request(app).patch(`/profiles/${p.id}`).set(auth(a)).send({ telefone: '+351 961 111 222' });
+    expect(mudou.status).toBe(200);
+    expect(mudou.body.perfil).toMatchObject({ telefone: '+351 961 111 222', pseudonimo: 'Avó Rosa' });
+    const outro = await request(app).patch(`/profiles/${p.id}`).set(auth(a)).send({ tamanhoTexto: 'normal' });
+    expect(outro.body.perfil.telefone).toBe('+351 961 111 222');
+    const apagou = await request(app).patch(`/profiles/${p.id}`).set(auth(a)).send({ telefone: null });
+    expect(apagou.body.perfil.telefone).toBeNull();
+  });
+
+  it('rejeita o que não é um número de telefone', async () => {
+    const a = await conta();
+    for (const telefone of ['abc', '123', '+351 912 345 678 999 000', '912-345-678']) {
+      const r = await request(app).post('/profiles').set(auth(a)).send({ pseudonimo: 'Avó Rosa', autorizacaoDeclarada: true, telefone });
+      expect(r.status, telefone).toBe(400);
+    }
+  });
+});

@@ -10,7 +10,7 @@ Plano de implementação do lado da app. O desenho e as decisões estão em [[pl
 | `app/android/app/google-services.json` e plugin `com.google.gms.google-services` no Gradle | feito |
 | Chave da conta de serviço em `backend/secrets/` e `FCM_SERVICE_ACCOUNT_FILE` no `backend/.env` | feito |
 | Backend: `PUT/DELETE /push-tokens`, envio, tokens inválidos, alertas sem repetição | feito |
-| Código Flutter (`firebase_messaging`, permissão, token, mensagens) | **por fazer** |
+| Código Flutter (`firebase_messaging`, permissão, token, mensagens) | feito (`app/lib/dados/push.dart`), falta testar num Android real |
 | iPhone (`GoogleService-Info.plist`, chave APNs, conta Apple Developer paga) | por fazer, mais tarde |
 
 ## O que o backend envia

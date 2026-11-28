@@ -6,10 +6,13 @@ import { SignJWT, importPKCS8 } from 'jose';
  * e cria a notificação localmente.
  */
 export interface MensagemPush {
-  tipo: 'alerta' | 'sync';
+  /** `lembrete`: o cuidador tocou em "Lembrar" e o telemóvel da pessoa mostra o alarme dessa toma. */
+  tipo: 'alerta' | 'sync' | 'lembrete';
   /** UUID do perfil. */
   perfil: string;
   subtipo?: 'toma_nao_confirmada' | 'toma_feita' | 'receita_a_acabar';
+  /** UUID da toma (só no `lembrete`). */
+  toma?: string;
 }
 
 export interface EnviadorPush {
@@ -37,7 +40,9 @@ const URL_TOKEN = 'https://oauth2.googleapis.com/token';
 export function corpoMensagem(token: string, m: MensagemPush) {
   const data: Record<string, string> = { tipo: m.tipo, perfil: m.perfil };
   if (m.subtipo) data.subtipo = m.subtipo;
-  const visivel = m.tipo === 'alerta';
+  if (m.toma) data.toma = m.toma;
+  const visivel = m.tipo !== 'sync';
+  const texto = m.tipo === 'lembrete' ? 'Tem um lembrete de quem cuida de si.' : 'Tem um aviso novo.';
   return {
     message: {
       token,
@@ -45,9 +50,9 @@ export function corpoMensagem(token: string, m: MensagemPush) {
       android: { priority: 'HIGH' },
       apns: {
         headers: { 'apns-priority': visivel ? '10' : '5', 'apns-push-type': visivel ? 'alert' : 'background' },
-        payload: { aps: visivel ? { alert: { title: 'Amparo', body: 'Tem um aviso novo.' }, sound: 'default' } : { 'content-available': 1 } },
+        payload: { aps: visivel ? { alert: { title: 'Amparo', body: texto }, sound: 'default' } : { 'content-available': 1 } },
       },
-      ...(visivel ? { notification: { title: 'Amparo', body: 'Tem um aviso novo.' } } : {}),
+      ...(visivel ? { notification: { title: 'Amparo', body: texto } } : {}),
     },
   };
 }

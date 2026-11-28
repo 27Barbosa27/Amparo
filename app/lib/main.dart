@@ -5,9 +5,11 @@ import 'package:material_ui/material_ui.dart';
 import 'app.dart';
 import 'dados/alarmes.dart';
 import 'dados/api.dart';
+import 'dados/apple.dart';
 import 'dados/autenticacao.dart';
 import 'dados/google.dart';
 import 'dados/ligacao.dart';
+import 'dados/push.dart';
 import 'dados/repositorio_api.dart';
 import 'dados/sessao_segura.dart';
 
@@ -23,6 +25,10 @@ const _tela = String.fromEnvironment('TELA');
 /// da Google avisa que ainda não está configurado. `GOOGLE_CLIENT_ID_IOS` é o ID de cliente iOS (só no iPhone).
 const _googleClientId = String.fromEnvironment('GOOGLE_CLIENT_ID');
 const _googleClientIdIos = String.fromEnvironment('GOOGLE_CLIENT_ID_IOS');
+
+/// Entrar com a Apple no Android: o Services ID e o retorno (`https://<api>/auth/apple/callback`). No iPhone não é preciso.
+const _appleServiceId = String.fromEnvironment('APPLE_SERVICE_ID');
+const _appleRetorno = String.fromEnvironment('APPLE_REDIRECT_URI');
 const _devEmail = String.fromEnvironment('DEV_EMAIL');
 const _devSenha = String.fromEnvironment('DEV_SENHA');
 
@@ -52,6 +58,11 @@ Future<void> main() async {
       repositorio: RepositorioApi(api),
       autenticacao: AutenticacaoApi(api),
       alarmes: alarmes,
+      push: criarServicoPush(),
+      apple: EntradaAppleReal(
+        servicesId: _appleServiceId,
+        retorno: _appleRetorno,
+      ),
       // No Chrome, `?tela=...` no endereço faz o mesmo que `--dart-define=TELA=...` (só desenvolvimento).
       // `?claro=1` abre no tema claro (só desenvolvimento, para comparar com o design).
       escuroInicial: !(kIsWeb && Uri.base.queryParameters['claro'] == '1'),

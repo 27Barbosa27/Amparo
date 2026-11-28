@@ -27,6 +27,8 @@ class AdicionarPessoaEcra extends StatefulWidget {
 
 class _AdicionarPessoaEcraState extends State<AdicionarPessoaEcra> {
   final _nome = TextEditingController();
+  final _telefone = TextEditingController();
+  String? _erroTelefone;
   AlarmesEm _alarmes = AlarmesEm.pessoa;
   TamanhoTexto _tamanho = TamanhoTexto.grande;
   bool _autorizacao = false;
@@ -38,6 +40,7 @@ class _AdicionarPessoaEcraState extends State<AdicionarPessoaEcra> {
   @override
   void dispose() {
     _nome.dispose();
+    _telefone.dispose();
     super.dispose();
   }
 
@@ -52,9 +55,18 @@ class _AdicionarPessoaEcraState extends State<AdicionarPessoaEcra> {
       setState(() => _erroNome = 'Escreva um nome ou apelido.');
       return;
     }
+    final telefone = _eu ? '' : _telefone.text.trim();
+    if (telefone.isNotEmpty && !telefoneValido(telefone)) {
+      setState(
+        () => _erroTelefone =
+            'Escreva só os números do telemóvel, por exemplo 912 345 678.',
+      );
+      return;
+    }
     setState(() {
       _aGuardar = true;
       _erroNome = null;
+      _erroTelefone = null;
       _erroGeral = null;
     });
     final erro = await widget.aoCriar(
@@ -62,6 +74,7 @@ class _AdicionarPessoaEcraState extends State<AdicionarPessoaEcra> {
         nome: nome,
         alarmesEm: _eu ? AlarmesEm.cuidador : _alarmes,
         tamanhoTexto: _tamanho,
+        telefone: telefone.isEmpty ? null : telefone,
       ),
     );
     if (!mounted) return;
@@ -124,6 +137,18 @@ class _AdicionarPessoaEcraState extends State<AdicionarPessoaEcra> {
             maxLength: 40,
             aoMudar: (_) {
               if (_erroNome != null) setState(() => _erroNome = null);
+            },
+          ),
+          const SizedBox(height: 14),
+          CampoTexto(
+            rotulo: 'Telemóvel (opcional, para lhe ligar)',
+            dica: '912 345 678',
+            controlador: _telefone,
+            erro: _erroTelefone,
+            teclado: TextInputType.phone,
+            maxLength: 18,
+            aoMudar: (_) {
+              if (_erroTelefone != null) setState(() => _erroTelefone = null);
             },
           ),
           const SizedBox(height: 18),

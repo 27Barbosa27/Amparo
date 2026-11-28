@@ -27,7 +27,7 @@ beforeAll(async () => {
   outraChavePrivada = outro.privateKey;
   const jwk: JWK = { ...(await exportJWK(par.publicKey)), kid: 'k1', alg: 'RS256', use: 'sig' };
   const chaves = createLocalJWKSet({ keys: [jwk] });
-  const verificadorExterno = criarVerificadorExterno({ appleClientId: APPLE_AUD, googleClientIds: GOOGLE_AUDS }, { apple: chaves, google: chaves });
+  const verificadorExterno = criarVerificadorExterno({ appleClientIds: [APPLE_AUD], googleClientIds: GOOGLE_AUDS }, { apple: chaves, google: chaves });
   app = createApp(db, config, { auth: { limitarPorIp: false, verificadorExterno } });
 });
 
@@ -205,5 +205,18 @@ describe('Particularidades', () => {
     const r = await entrar('google', await token('google'), { aceitaTermos: true });
     const { rows } = await db.query("select acao, user_id from audit_logs where user_id = $1 and acao like 'auth.%'", [r.body.utilizador.id]);
     expect(rows.map((x) => x.acao)).toEqual(['auth.registo_google']);
+  });
+});
+
+describe('Retorno da Apple no Android', () => {
+  it('devolve o formulário da Apple à app por um intent, sem o guardar', async () => {
+    const r = await request(app)
+      .post('/auth/apple/callback')
+      .type('form')
+      .send({ code: 'c0d1g0', id_token: 'um.id.token', state: 'estado-1' });
+    expect(r.status).toBe(303);
+    expect(r.headers.location).toBe(
+      'intent://callback?code=c0d1g0&id_token=um.id.token&state=estado-1#Intent;package=pt.amparo.amparo;scheme=signinwithapple;end',
+    );
   });
 });

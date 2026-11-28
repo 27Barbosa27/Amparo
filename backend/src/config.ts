@@ -33,8 +33,16 @@ const schema = z.object({
   EMAIL_FROM: z.string().min(3).default('Amparo <nao-responder@amparo.example>'),
   /** Endereço base da ligação do email, que abre a app (link direto). */
   APP_LINK_BASE: z.string().url().default('https://amparo.example/repor'),
-  /** Entrar com a Apple: o identificador da aplicação (`aud` do ID token). Sem isto o endpoint responde 501. */
-  APPLE_CLIENT_ID: z.string().min(1).optional(),
+  /**
+   * Entrar com a Apple: os `aud` aceites no ID token, separados por vírgulas. No iPhone é o bundle id; no Android e
+   * no browser é o Services ID. Sem isto o endpoint responde 501.
+   */
+  APPLE_CLIENT_ID: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined)),
+  /** O `applicationId` Android: o retorno da Apple (`/auth/apple/callback`) reabre esta app. */
+  APP_ANDROID_PACKAGE: z.string().regex(/^[a-zA-Z][w.]*$/).default('pt.amparo.amparo'),
   /** Entrar com a Google: os identificadores de cliente aceites (web, Android, iOS), separados por vírgulas. */
   GOOGLE_CLIENT_IDS: z
     .string()
